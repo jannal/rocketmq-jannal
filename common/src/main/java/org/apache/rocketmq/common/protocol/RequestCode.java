@@ -18,69 +18,81 @@
 package org.apache.rocketmq.common.protocol;
 
 public class RequestCode {
-
+    //  发送消息
     public static final int SEND_MESSAGE = 10;
-
+    //  订阅消息
     public static final int PULL_MESSAGE = 11;
-
+    //  查询消息
     public static final int QUERY_MESSAGE = 12;
+    //  查询Broker Offset
     public static final int QUERY_BROKER_OFFSET = 13;
+    //  查询Consumer Offset
     public static final int QUERY_CONSUMER_OFFSET = 14;
+    // 更新Consumer Offset
     public static final int UPDATE_CONSUMER_OFFSET = 15;
+    //更新或者增加一个Topic
     public static final int UPDATE_AND_CREATE_TOPIC = 17;
+    //获取所有Topic的配置（Slave和Namesrv都会向Master请求此配置）
     public static final int GET_ALL_TOPIC_CONFIG = 21;
+    // 获取所有Topic配置（Slave和Namesrv都会向Master请求此配置
     public static final int GET_TOPIC_CONFIG_LIST = 22;
-
+    //获取所有Topic名称列表
     public static final int GET_TOPIC_NAME_LIST = 23;
-
+    // 更新Broker上的配置
     public static final int UPDATE_BROKER_CONFIG = 25;
-
+    // 获取Broker上的配置
     public static final int GET_BROKER_CONFIG = 26;
-
+    //  触发Broker删除文件
     public static final int TRIGGER_DELETE_FILES = 27;
-
+    // 获取Broker运行时信息
     public static final int GET_BROKER_RUNTIME_INFO = 28;
+    //根据时间查询队列的Offset
     public static final int SEARCH_OFFSET_BY_TIMESTAMP = 29;
+    // 查询队列最大Offset
     public static final int GET_MAX_OFFSET = 30;
+    // 查询队列最小Offset
     public static final int GET_MIN_OFFSET = 31;
-
+    // 查询队列最早消息对应时间
     public static final int GET_EARLIEST_MSG_STORETIME = 32;
-
+    //根据消息ID来查询消息
     public static final int VIEW_MESSAGE_BY_ID = 33;
-
+    //Client向Client发送心跳，并注册自身
     public static final int HEART_BEAT = 34;
-
+    // Client注销
     public static final int UNREGISTER_CLIENT = 35;
-
+    // Consumer将处理不了的消息发回服务器
     public static final int CONSUMER_SEND_MSG_BACK = 36;
-
+    //Commit或者Rollback事务
     public static final int END_TRANSACTION = 37;
+    // 获取ConsumerId列表通过GroupName
     public static final int GET_CONSUMER_LIST_BY_GROUP = 38;
-
+    //主动向Producer回查事务状态
     public static final int CHECK_TRANSACTION_STATE = 39;
-
+    //Broker通知Consumer列表变化
     public static final int NOTIFY_CONSUMER_IDS_CHANGED = 40;
-
+    // Consumer向Master锁定队列
     public static final int LOCK_BATCH_MQ = 41;
-
+    //Consumer向Master解锁队列
     public static final int UNLOCK_BATCH_MQ = 42;
+    // 获取所有Consumer Offset
     public static final int GET_ALL_CONSUMER_OFFSET = 43;
-
+    //获取所有定时进度
     public static final int GET_ALL_DELAY_OFFSET = 45;
 
     public static final int CHECK_CLIENT_CONFIG = 46;
-
+    // Namesrv 向Namesrv追加KV配置
     public static final int PUT_KV_CONFIG = 100;
-
+    // Namesrv 从Namesrv获取KV配置
     public static final int GET_KV_CONFIG = 101;
-
+    //从Namesrv删除KV配置
     public static final int DELETE_KV_CONFIG = 102;
-
+    // 注册一个Broker，数据都是持久化的，如果存在则覆盖配置
     public static final int REGISTER_BROKER = 103;
-
+    //卸载一个Broker，数据都是持久化的
     public static final int UNREGISTER_BROKER = 104;
+    //卸载一个Broker，数据都是持久化的
     public static final int GET_ROUTEINTO_BY_TOPIC = 105;
-
+    //获取注册到Name Server的所有Broker集群信息
     public static final int GET_BROKER_CLUSTER_INFO = 106;
     public static final int UPDATE_AND_CREATE_SUBSCRIPTIONGROUP = 200;
     public static final int GET_ALL_SUBSCRIPTIONGROUP_CONFIG = 201;
@@ -88,10 +100,11 @@ public class RequestCode {
     public static final int GET_CONSUMER_CONNECTION_LIST = 203;
     public static final int GET_PRODUCER_CONNECTION_LIST = 204;
     public static final int WIPE_WRITE_PERM_OF_BROKER = 205;
-
+    // 从Name Server获取完整Topic列表
     public static final int GET_ALL_TOPIC_LIST_FROM_NAMESERVER = 206;
-
+    // 从Broker删除订阅组
     public static final int DELETE_SUBSCRIPTIONGROUP = 207;
+    //从Broker获取消费状态（进度）
     public static final int GET_CONSUME_STATS = 208;
 
     public static final int SUSPEND_CONSUMER = 209;

@@ -155,6 +155,7 @@ public class RemotingHelper {
             return "";
         }
         SocketAddress remote = channel.remoteAddress();
+        // 此处是这种格式/127.0.0.1:54878
         final String addr = remote != null ? remote.toString() : "";
 
         if (addr.length() > 0) {

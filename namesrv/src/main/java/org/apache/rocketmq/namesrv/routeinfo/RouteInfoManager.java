@@ -49,10 +49,15 @@ public class RouteInfoManager {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.NAMESRV_LOGGER_NAME);
     private final static long BROKER_CHANNEL_EXPIRED_TIME = 1000 * 60 * 2;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
+    //topic列表对应的队列信息
     private final HashMap<String/* topic */, List<QueueData>> topicQueueTable;
+    //Broker地址信息
     private final HashMap<String/* brokerName */, BrokerData> brokerAddrTable;
+    //broker集群信息
     private final HashMap<String/* clusterName */, Set<String/* brokerName */>> clusterAddrTable;
+    //Broker当前存活的Broker(非实时)
     private final HashMap<String/* brokerAddr */, BrokerLiveInfo> brokerLiveTable;
+    //Broker过滤信息
     private final HashMap<String/* brokerAddr */, List<String>/* Filter Server */> filterServerTable;
 
     public RouteInfoManager() {
@@ -112,16 +117,17 @@ public class RouteInfoManager {
         try {
             try {
                 this.lock.writeLock().lockInterruptibly();
-
+                //clusterName默认DefaultCluster，通过集群名字获取brokerNames集合
                 Set<String> brokerNames = this.clusterAddrTable.get(clusterName);
                 if (null == brokerNames) {
                     brokerNames = new HashSet<String>();
                     this.clusterAddrTable.put(clusterName, brokerNames);
                 }
+                //将当前注册的brokerName添加到集群中
                 brokerNames.add(brokerName);
-
+                //是否第一次注册
                 boolean registerFirst = false;
-
+                //通过brokerName获取Broker数据对象
                 BrokerData brokerData = this.brokerAddrTable.get(brokerName);
                 if (null == brokerData) {
                     registerFirst = true;
@@ -163,6 +169,7 @@ public class RouteInfoManager {
                     }
                 }
 
+                //master的BrokerId规定是0
                 if (MixAll.MASTER_ID != brokerId) {
                     String masterAddr = brokerData.getBrokerAddrs().get(MixAll.MASTER_ID);
                     if (masterAddr != null) {
@@ -420,6 +427,7 @@ public class RouteInfoManager {
         while (it.hasNext()) {
             Entry<String, BrokerLiveInfo> next = it.next();
             long last = next.getValue().getLastUpdateTimestamp();
+            //2分钟没有活跃的Broker
             if ((last + BROKER_CHANNEL_EXPIRED_TIME) < System.currentTimeMillis()) {
                 RemotingUtil.closeChannel(next.getValue().getChannel());
                 it.remove();
@@ -742,6 +750,7 @@ public class RouteInfoManager {
 }
 
 class BrokerLiveInfo {
+    //最后一次更新时间，用于判断存活时间
     private long lastUpdateTimestamp;
     private DataVersion dataVersion;
     private Channel channel;

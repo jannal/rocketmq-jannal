@@ -59,16 +59,19 @@ public abstract class NettyRemotingAbstract {
 
     /**
      * Semaphore to limit maximum number of on-going one-way requests, which protects system memory footprint.
+     * 限制单程请求的最大数量，保护系统内存占用
      */
     protected final Semaphore semaphoreOneway;
 
     /**
      * Semaphore to limit maximum number of on-going asynchronous requests, which protects system memory footprint.
+     *  限制异步请求的最大数量，保护系统内存占用
      */
     protected final Semaphore semaphoreAsync;
 
     /**
      * This map caches all on-going requests.
+     * 保存请求id与响应Future之间的关系
      */
     protected final ConcurrentMap<Integer /* opaque */, ResponseFuture> responseTable =
         new ConcurrentHashMap<Integer, ResponseFuture>(256);
@@ -76,6 +79,7 @@ public abstract class NettyRemotingAbstract {
     /**
      * This container holds all processors per request code, aka, for each incoming request, we may look up the
      * responding processor in this map to handle the request.
+     * 请求code与请求处理器之间的关系
      */
     protected final HashMap<Integer/* request code */, Pair<NettyRequestProcessor, ExecutorService>> processorTable =
         new HashMap<Integer, Pair<NettyRequestProcessor, ExecutorService>>(64);
@@ -175,7 +179,7 @@ public abstract class NettyRemotingAbstract {
                 public void run() {
                     try {
                         RPCHook rpcHook = NettyRemotingAbstract.this.getRPCHook();
-                        if (rpcHook != null) {
+                         if (rpcHook != null) {
                             rpcHook.doBeforeRequest(RemotingHelper.parseChannelRemoteAddr(ctx.channel()), cmd);
                         }
 
@@ -342,6 +346,7 @@ public abstract class NettyRemotingAbstract {
             ResponseFuture rep = next.getValue();
 
             if ((rep.getBeginTimestamp() + rep.getTimeoutMillis() + 1000) <= System.currentTimeMillis()) {
+                //如果有单程调用的信号量，释放掉
                 rep.release();
                 it.remove();
                 rfList.add(rep);
@@ -361,6 +366,7 @@ public abstract class NettyRemotingAbstract {
     public RemotingCommand invokeSyncImpl(final Channel channel, final RemotingCommand request,
         final long timeoutMillis)
         throws InterruptedException, RemotingSendRequestException, RemotingTimeoutException {
+        //生产一个请求Id
         final int opaque = request.getOpaque();
 
         try {
@@ -404,18 +410,22 @@ public abstract class NettyRemotingAbstract {
         final InvokeCallback invokeCallback)
         throws InterruptedException, RemotingTooMuchRequestException, RemotingTimeoutException, RemotingSendRequestException {
         long beginStartTime = System.currentTimeMillis();
+        //获取请求Id
         final int opaque = request.getOpaque();
+        //获取信号量
         boolean acquired = this.semaphoreAsync.tryAcquire(timeoutMillis, TimeUnit.MILLISECONDS);
         if (acquired) {
+            //SemaphoreReleaseOnlyOnce 封装信号量，保证信号量仅被释放一次
             final SemaphoreReleaseOnlyOnce once = new SemaphoreReleaseOnlyOnce(this.semaphoreAsync);
             long costTime = System.currentTimeMillis() - beginStartTime;
             if (timeoutMillis < costTime) {
                 throw new RemotingTooMuchRequestException("invokeAsyncImpl call timeout");
             }
-
+            //创建ResponseFuture并建立opaque和ResponseFuture之间的关联
             final ResponseFuture responseFuture = new ResponseFuture(channel, opaque, timeoutMillis - costTime, invokeCallback, once);
             this.responseTable.put(opaque, responseFuture);
             try {
+                //发送数据，并异步监听响应结果
                 channel.writeAndFlush(request).addListener(new ChannelFutureListener() {
                     @Override
                     public void operationComplete(ChannelFuture f) throws Exception {
@@ -518,9 +528,11 @@ public abstract class NettyRemotingAbstract {
     }
 
     class NettyEventExecutor extends ServiceThread {
+        //使用阻塞队列存储NettyEvent，包括Close、Connect、Exception、IDLE
         private final LinkedBlockingQueue<NettyEvent> eventQueue = new LinkedBlockingQueue<NettyEvent>();
         private final int maxSize = 10000;
 
+        //事件队列大小不能根据参数调整，这里是10000
         public void putNettyEvent(final NettyEvent event) {
             if (this.eventQueue.size() <= maxSize) {
                 this.eventQueue.add(event);

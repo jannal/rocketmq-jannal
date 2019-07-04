@@ -97,6 +97,7 @@ public class KVConfigManager {
                 String content = kvConfigSerializeWrapper.toJson();
 
                 if (null != content) {
+                    //存储到文件中
                     MixAll.string2File(content, this.namesrvController.getNamesrvConfig().getKvConfigPath());
                 }
             } catch (IOException e) {
