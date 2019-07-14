@@ -32,7 +32,15 @@ public class IndexFile {
     private static int hashSlotSize = 4;
     private static int indexSize = 20;
     private static int invalidIndex = 0;
+    /**
+     * 槽位，默认500w个
+     * 配置参见org.apache.rocketmq.store.config.MessageStoreConfig#maxHashSlotNum
+     */
     private final int hashSlotNum;
+    /**
+     * 默认2000w
+     * 配置参见org.apache.rocketmq.store.config.MessageStoreConfig#maxIndexNum
+     */
     private final int indexNum;
     private final MappedFile mappedFile;
     private final FileChannel fileChannel;

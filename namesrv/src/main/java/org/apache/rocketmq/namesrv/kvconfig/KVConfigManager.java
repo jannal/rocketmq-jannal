@@ -97,7 +97,12 @@ public class KVConfigManager {
                 String content = kvConfigSerializeWrapper.toJson();
 
                 if (null != content) {
-                    //存储到文件中
+                    /**
+                     * FIXME by jannal
+                     *      存储到文件中  string2File 应该返回boolean(因为使用了renameTo方法)，以判断文件是否重命名成功，
+                     *      如果为false，应该记录日志。
+                     *      1. File#renameTo如果目标路径下有相同的文件名称，则命名失败（或者移动失败）；
+                     */
                     MixAll.string2File(content, this.namesrvController.getNamesrvConfig().getKvConfigPath());
                 }
             } catch (IOException e) {

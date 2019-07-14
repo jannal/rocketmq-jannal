@@ -32,7 +32,7 @@ public class ProducerTest {
      */
     @Test
     public void testSync() {
-        String namesrvAddr = "rocketmq-nameserver1:9876;rocketmq-nameserver2:9877";
+        String namesrvAddr = "rocketmq-nameserver1:9876;rocketmq-nameserver2:9876";
         String producerGroup = "ProducerGroupName";
         final DefaultMQProducer defaultMQProducer = new DefaultMQProducer(producerGroup);
         try {

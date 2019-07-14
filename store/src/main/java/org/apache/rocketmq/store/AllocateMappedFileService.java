@@ -37,6 +37,7 @@ import org.apache.rocketmq.store.config.BrokerRole;
 public class AllocateMappedFileService extends ServiceThread {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
     private static int waitTimeOut = 1000 * 5;
+    //文件路径
     private ConcurrentMap<String, AllocateRequest> requestTable =
         new ConcurrentHashMap<String, AllocateRequest>();
     private PriorityBlockingQueue<AllocateRequest> requestQueue =
@@ -48,6 +49,13 @@ public class AllocateMappedFileService extends ServiceThread {
         this.messageStore = messageStore;
     }
 
+    /**
+     * 提交mapfile的创建请求 。 包含下一个 和下下个mapfile .
+     * @param nextFilePath  下一个文件的路径
+     * @param nextNextFilePath 下下个文件的路径
+     * @param fileSize
+     * @return
+     */
     public MappedFile putRequestAndReturnMappedFile(String nextFilePath, String nextNextFilePath, int fileSize) {
         int canSubmitRequests = 2;
         if (this.messageStore.getMessageStoreConfig().isTransientStorePoolEnable()) {
@@ -67,6 +75,9 @@ public class AllocateMappedFileService extends ServiceThread {
                 this.requestTable.remove(nextFilePath);
                 return null;
             }
+            /**
+             * TODO 无界队列offer永远返回true，此处的判断毫无意义吧
+             */
             boolean offerOK = this.requestQueue.offer(nextReq);
             if (!offerOK) {
                 log.warn("never expected here, add a request to preallocate queue failed");
@@ -138,6 +149,10 @@ public class AllocateMappedFileService extends ServiceThread {
         }
     }
 
+    /**
+     * 此线程在DefaultMessageStore创建时启动
+     * org.apache.rocketmq.store.DefaultMessageStore#DefaultMessageStore(org.apache.rocketmq.store.config.MessageStoreConfig, org.apache.rocketmq.store.stats.BrokerStatsManager, org.apache.rocketmq.store.MessageArrivingListener, org.apache.rocketmq.common.BrokerConfig)
+     */
     public void run() {
         log.info(this.getServiceName() + " service started");
 
@@ -184,6 +199,7 @@ public class AllocateMappedFileService extends ServiceThread {
                 }
 
                 long eclipseTime = UtilAll.computeEclipseTimeMilliseconds(beginTime);
+                //创建MappedFile 花费大于10ms打印日志
                 if (eclipseTime > 10) {
                     int queueSize = this.requestQueue.size();
                     log.warn("create mappedFile spent time(ms) " + eclipseTime + " queue size " + queueSize

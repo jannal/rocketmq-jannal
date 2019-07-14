@@ -40,13 +40,13 @@ public class MappedFileQueue {
     private static final int DELETE_FILES_BATCH_MAX = 10;
     //文件队列的存储路径
     private final String storePath;
-    //MappedFile大小
+    //单个MappedFile文件的大小
     private final int mappedFileSize;
-
+    //MappedFile文件的集合
     private final CopyOnWriteArrayList<MappedFile> mappedFiles = new CopyOnWriteArrayList<MappedFile>();
     //预分配MappedFile的服务线程
     private final AllocateMappedFileService allocateMappedFileService;
-    //已经刷到磁盘的位置(某一个mappedFile中的位置)
+    //已经刷到磁盘的位置(某一个mappedFile中的位置)，位置之前的所有数据都持久化到磁盘
     private long flushedWhere = 0;
     //已经提交的位置(write >= commit >= flush位置)
     private long committedWhere = 0;
@@ -67,7 +67,7 @@ public class MappedFileQueue {
             MappedFile pre = null;
             while (iterator.hasNext()) {
                 MappedFile cur = iterator.next();
-                //遍历整个mappedFile队列，检查上下一个的起始偏移量与上一个的起始偏移量是否是mappedFileSize
+                //遍历整个mappedFile队列，检查下一个的起始偏移量与上一个的起始偏移量是否是mappedFileSize
                 if (pre != null) {
                     if (cur.getFileFromOffset() - pre.getFileFromOffset() != this.mappedFileSize) {
                         LOG_ERROR.error("[BUG]The mappedFile queue's data is damaged, the adjacent mappedFile's offset don't match. pre file {}, cur file {}",
@@ -79,12 +79,18 @@ public class MappedFileQueue {
         }
     }
 
+
     public MappedFile getMappedFileByTime(final long timestamp) {
+        //保留的MappedFile个数设置为0
         Object[] mfs = this.copyMappedFiles(0);
 
         if (null == mfs)
             return null;
 
+        /**
+         * 从 MappedFile 列表中第一个文件开始查找， 找到第一个最后一次更新时间大于待查找时间戳的文件，
+         * 如果不存在，则返回最后一个 MappedFile 文件 。
+         */
         for (int i = 0; i < mfs.length; i++) {
             MappedFile mappedFile = (MappedFile) mfs[i];
             if (mappedFile.getLastModifiedTimestamp() >= timestamp) {
@@ -287,7 +293,7 @@ public class MappedFileQueue {
         }
 
         ListIterator<MappedFile> iterator = this.mappedFiles.listIterator();
-        //TODO jannal 永远返回false吧 ???
+        //FIXME jannal 永远返回false吧 ???  正确的逆序遍历 this.mappedFiles.listIterator(this.mappedFiles.size());
         while (iterator.hasPrevious()) {
             mappedFileLast = iterator.previous();
             if (offset >= mappedFileLast.getFileFromOffset()) {
@@ -504,17 +510,19 @@ public class MappedFileQueue {
                         this.mappedFileSize,
                         this.mappedFiles.size());
                 } else {
+                    //要减去已经被删除的MappedFile的大小(即当前第一个文件的文件名并不一定是00000000000000000000)
                     int index = (int) ((offset / this.mappedFileSize) - (firstMappedFile.getFileFromOffset() / this.mappedFileSize));
                     MappedFile targetFile = null;
                     try {
                         targetFile = this.mappedFiles.get(index);
                     } catch (Exception ignored) {
                     }
-
+                    //如果offset大于MappedFile的起始偏移量并且小于当前MappedFile的最大偏移量则直接返回
                     if (targetFile != null && offset >= targetFile.getFileFromOffset()
                         && offset < targetFile.getFileFromOffset() + this.mappedFileSize) {
                         return targetFile;
                     }
+
 
                     for (MappedFile tmpMappedFile : this.mappedFiles) {
                         if (offset >= tmpMappedFile.getFileFromOffset()
@@ -537,6 +545,7 @@ public class MappedFileQueue {
 
     /**
      * 返回队列中第一个MappedFile，这里忽略索引越界异常，可能一个都没有，返回null
+     * 先判断mappedFiles是否为空，然后get(0),因为存在并发，所以需要即使判断为空，还是可能索引越界
      * @return
      */
     public MappedFile getFirstMappedFile() {

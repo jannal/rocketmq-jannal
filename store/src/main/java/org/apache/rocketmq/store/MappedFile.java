@@ -76,16 +76,26 @@ public class MappedFile extends ReferenceResource {
     private long fileFromOffset;
     private File file;
     private MappedByteBuffer mappedByteBuffer;
+    //文件最后一次写入时间
     private volatile long storeTimestamp = 0;
+    //是否是MappedFileQueue中的第一个文件
     private boolean firstCreateInQueue = false;
 
     public MappedFile() {
     }
 
+    /**
+     * 如果设置transientStorePoolEnable为false则调用此方法，参见
+     * {@link org.apache.rocketmq.store.AllocateMappedFileService#mmapOperation()}
+     */
     public MappedFile(final String fileName, final int fileSize) throws IOException {
         init(fileName, fileSize);
     }
-
+    /**
+     * 如果设置transientStorePoolEnable为true则调用此方法，参见
+     * org.apache.rocketmq.store.config.MessageStoreConfig#isTransientStorePoolEnable()
+     * org.apache.rocketmq.store.AllocateMappedFileService#mmapOperation()
+     */
     public MappedFile(final String fileName, final int fileSize,
         final TransientStorePool transientStorePool) throws IOException {
         init(fileName, fileSize, transientStorePool);
@@ -179,7 +189,7 @@ public class MappedFile extends ReferenceResource {
         //通过文件名获取起始偏移量
         this.fileFromOffset = Long.parseLong(this.file.getName());
         boolean ok = false;
-
+        //确保父目录存在
         ensureDirOK(this.file.getParent());
 
         try {
@@ -302,16 +312,23 @@ public class MappedFile extends ReferenceResource {
     public int flush(final int flushLeastPages) {
         if (this.isAbleToFlush(flushLeastPages)) {
             if (this.hold()) {
+                //有效数据的最大位置
                 int value = getReadPosition();
 
                 try {
                     //We only append data to fileChannel or mappedByteBuffer, never both.
                     if (writeBuffer != null || this.fileChannel.position() != 0) {
+                        //false表示只需要将文件内容的更新写入存储;true表示必须写入文件内容和元数据更改
                         this.fileChannel.force(false);
                     } else {
                         this.mappedByteBuffer.force();
                     }
                 } catch (Throwable e) {
+                    /**
+                     * FIXME jannal
+                     * fileChannel.force会抛出IOException，可能会丢失一部分数据
+                     * 如果抛异常不去设置flushedPosition，等到下次flush，岂不是更好???
+                     */
                     log.error("Error occurred when force data to disk.", e);
                 }
 
@@ -325,8 +342,16 @@ public class MappedFile extends ReferenceResource {
         return this.getFlushedPosition();
     }
 
-
+    /**
+     * commitLeastPages 为本次提交最小的页面，默认4页(4*4KB),可参见
+     * org.apache.rocketmq.store.CommitLog.CommitRealTimeService#run()
+     */
     public int commit(final int commitLeastPages) {
+        /**
+         * 1.writeBuffer 为空就不提交，而writeBuffer只有开启
+         * transientStorePoolEnable为true并且是异步刷盘模式才会不为空
+         * 所以commit是针对异步刷盘使用的
+         */
         if (writeBuffer == null) {
             //no need to commit data to file channel, so just regard wrotePosition as committedPosition.
             return this.wrotePosition.get();
@@ -342,6 +367,7 @@ public class MappedFile extends ReferenceResource {
 
         // All dirty data has been committed to FileChannel.
         if (writeBuffer != null && this.transientStorePool != null && this.fileSize == this.committedPosition.get()) {
+            //清理工作，归还到堆外内存池中，并且释放当前writeBuffer
             this.transientStorePool.returnBuffer(writeBuffer);
             this.writeBuffer = null;
         }
@@ -355,11 +381,18 @@ public class MappedFile extends ReferenceResource {
 
         if (writePos - this.committedPosition.get() > 0) {
             try {
+                //创建writeBuffer的共享缓存区，slice共享内存，其实就是切片
+                //但是position、mark、limit单独维护
+                //新缓冲区的position=0，其capacity和limit将是缓冲区中剩余的字节数，其mark=undefined
                 ByteBuffer byteBuffer = writeBuffer.slice();
+                //上一次的提交指针作为position
                 byteBuffer.position(lastCommittedPosition);
+                //当前最大的写指针作为limit
                 byteBuffer.limit(writePos);
+                //把commitedPosition到wrotePosition的写入FileChannel中
                 this.fileChannel.position(lastCommittedPosition);
                 this.fileChannel.write(byteBuffer);
+                //更新提交指针
                 this.committedPosition.set(writePos);
             } catch (Throwable e) {
                 log.error("Error occurred when commit data to FileChannel.", e);
@@ -380,13 +413,13 @@ public class MappedFile extends ReferenceResource {
     private boolean isAbleToFlush(final int flushLeastPages) {
         int flush = this.flushedPosition.get();
         int write = getReadPosition();
-
+        //写满了
         if (this.isFull()) {
             return true;
         }
 
         if (flushLeastPages > 0) {
-            //总共写入的页大小-已经提交的页大小>=最少一次写入的页大小
+            //总共写入的页大小-已经提交的页大小>=最少一次写入的页大小，OS_PAGE_SIZE默认4kb
             return ((write / OS_PAGE_SIZE) - (flush / OS_PAGE_SIZE)) >= flushLeastPages;
         }
 
@@ -402,6 +435,7 @@ public class MappedFile extends ReferenceResource {
         }
 
         if (commitLeastPages > 0) {
+            //总共写入的页大小-已经提交的页大小>=最少一次写入的页大小，OS_PAGE_SIZE默认4kb
             return ((write / OS_PAGE_SIZE) - (flush / OS_PAGE_SIZE)) >= commitLeastPages;
         }
 
@@ -546,7 +580,10 @@ public class MappedFile extends ReferenceResource {
             byteBuffer.put(i, (byte) 0);
             // force flush when flush disk type is sync
             if (type == FlushDiskType.SYNC_FLUSH) {
-                //同步刷盘，每修改pages个分页强制刷一次盘
+                /**
+                 *  同步刷盘，每修改pages个分页强制刷一次盘，默认16MB
+                 * 参见org.apache.rocketmq.store.config.MessageStoreConfig#flushLeastPagesWhenWarmMapedFile
+                 */
                 if ((i / OS_PAGE_SIZE) - (flush / OS_PAGE_SIZE) >= pages) {
                     flush = i;
                     //FIXME 刷入修改的内容，不会有性能问题？？
@@ -608,10 +645,13 @@ public class MappedFile extends ReferenceResource {
     }
 
     /**
+     * 在读取CommitLog时，虽然可以通过PageCache提高目标消息直接在物理内存中读取的命中率。但是由于CommitLog存放的是所有Topic的消息，在读取时是随机访问，所以仍会出现缺页中断问题，导致内存被频繁换入换出。为此，RocketMQ使用了mlock系统调用，
+     * 将mmap调用后所占用的堆外内存锁定，变为常驻内存，进一步让目标消息更多的在内存中读取。
+     *
      *  这个方法是一个Native级别的调用，调用了标准C库的方法
      *  mlock方法在标准C中的实现是将锁住指定的内存区域避免被操作系统调到swap空间中，
      *  而madvise方法则要配合着mmap来说了，一般来说通过mmap建立起的内存文件在刚开始并没有将文件内容映射进来，
-     *  而是只建立一个映射关系，而当你读相对应区域的时候，它第一次还是会去读磁盘，而我们前面说了，
+     *  而是只建立一个映射关系，而当你读相对应区域的时候，它第一次还是会去读磁盘
      *  读写基本上都只是和Page Cache打交道，那么当读相对应页没有拿到数据的时候，系统将会产生一个缺页异常，
      *  然后去读磁盘中的内容，最后写回Page Cache然后再次读取Page Cache然后返回，
      *  而madvise的作用是一次性先将一段数据读入到映射内存区域，这样就减少了缺页异常的产生，
@@ -623,13 +663,14 @@ public class MappedFile extends ReferenceResource {
      *  linux默认分页为4K，可以想象读一个1G的消息存储文件要发生多少次中断。
      *
      *  解决办法：将madvise()和mmap()搭配起来使用，在使用数据前告诉内核这一段数据需要使用，将其一次读入内存。
-     *  madvise()这个函数可以对映射的内存提出使用建议，从而提高内存。
+     *  madvise()这个函数可以对映射的内存提出使用建议，从而减少在程序运行时的硬盘缺页中断。。
      */
     public void mlock() {
         final long beginTime = System.currentTimeMillis();
         final long address = ((DirectBuffer) (this.mappedByteBuffer)).address();
         Pointer pointer = new Pointer(address);
         {
+            // 内存锁定
             // 通过mlock可以将进程使用的部分或者全部的地址空间锁定在物理内存中，防止其被交换到swap空间。
             // 对时间敏感的应用会希望全部使用物理内存，提高数据访问和操作的效率。
             int ret = LibC.INSTANCE.mlock(pointer, new NativeLong(this.fileSize));
@@ -637,6 +678,8 @@ public class MappedFile extends ReferenceResource {
         }
 
         {
+            //文件预读
+            //madvise 一次性先将一段数据读入到映射内存区域，这样就减少了缺页异常的产生。
             int ret = LibC.INSTANCE.madvise(pointer, new NativeLong(this.fileSize), LibC.MADV_WILLNEED);
             log.info("madvise {} {} {} ret = {} time consuming = {}", address, this.fileName, this.fileSize, ret, System.currentTimeMillis() - beginTime);
         }

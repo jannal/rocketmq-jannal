@@ -14,13 +14,13 @@ public class Test {
         list.add("2");
         list.add("3");
         list.add("4");
-        ListIterator<String> iterator = list.listIterator();
+        // 逆序遍历
+        ListIterator<String> iterator = list.listIterator(list.size());
         String result = null;
         while (iterator.hasPrevious()) {
             result = iterator.previous();
             System.out.println(result);
-            iterator.remove();
-
+            //iterator.remove();
         }
 
 
