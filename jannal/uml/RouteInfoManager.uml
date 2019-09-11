@@ -9,25 +9,8 @@
     <node x="131.99999999999994" y="200.0">org.apache.rocketmq.namesrv.routeinfo.RouteInfoManager</node>
   </nodes>
   <notes />
-  <edges>
-    <edge source="org.apache.rocketmq.namesrv.routeinfo.RouteInfoManager" target="org.apache.rocketmq.common.protocol.route.BrokerData">
-      <point x="134.33333333333343" y="-103.0" />
-      <point x="467.83333333333337" y="170.0" />
-      <point x="621.5" y="170.0" />
-      <point x="0.0" y="59.0" />
-    </edge>
-    <edge source="org.apache.rocketmq.namesrv.routeinfo.RouteInfoManager" target="org.apache.rocketmq.namesrv.routeinfo.BrokerLiveInfo">
-      <point x="5.6843418860808015E-14" y="-103.0" />
-      <point x="0.0" y="59.0" />
-    </edge>
-    <edge source="org.apache.rocketmq.namesrv.routeinfo.RouteInfoManager" target="org.apache.rocketmq.common.protocol.route.QueueData">
-      <point x="-179.11111111111103" y="-103.0" />
-      <point x="154.3888888888889" y="180.0" />
-      <point x="32.666666666666686" y="180.0" />
-      <point x="-65.33333333333331" y="70.0" />
-    </edge>
-  </edges>
-  <settings layout="Hierarchic Group" zoom="1.0" x="386.0" y="203.0" />
+  <edges />
+  <settings layout="Hierarchic Group" zoom="1.0" x="374.0" y="202.0" />
   <SelectedNodes>
     <node>org.apache.rocketmq.common.protocol.route.BrokerData</node>
   </SelectedNodes>

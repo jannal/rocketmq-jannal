@@ -50,7 +50,7 @@
       <point x="0.0" y="15.0" />
     </edge>
   </edges>
-  <settings layout="Hierarchic Group" zoom="1.0" x="491.0" y="324.0" />
+  <settings layout="Hierarchic Group" zoom="0.885480572597137" x="479.0" y="363.5" />
   <SelectedNodes>
     <node>org.apache.rocketmq.remoting.netty.NettyRemotingServer</node>
   </SelectedNodes>

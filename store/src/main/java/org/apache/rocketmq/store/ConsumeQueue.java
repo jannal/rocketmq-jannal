@@ -420,18 +420,20 @@ public class ConsumeQueue {
     private boolean putMessagePositionInfo(final long offset, final int size, final long tagsCode,
         final long cqOffset) {
 
+        //maxPhysicOffset记录了上一次ConsumeQueue更新的消息在CommitLog中的偏移量
         if (offset <= this.maxPhysicOffset) {
             return true;
         }
 
         this.byteBufferIndex.flip();
+        //20byte
         this.byteBufferIndex.limit(CQ_STORE_UNIT_SIZE);
         this.byteBufferIndex.putLong(offset);
         this.byteBufferIndex.putInt(size);
         this.byteBufferIndex.putLong(tagsCode);
-
+        //cqOffset为ConsumerQueue中记录了偏移量总数
         final long expectLogicOffset = cqOffset * CQ_STORE_UNIT_SIZE;
-
+        //获取ConsumeQueue当前对应的MappedFile
         MappedFile mappedFile = this.mappedFileQueue.getLastMappedFile(expectLogicOffset);
         if (mappedFile != null) {
 
