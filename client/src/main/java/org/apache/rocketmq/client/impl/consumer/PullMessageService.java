@@ -56,7 +56,7 @@ public class PullMessageService extends ServiceThread {
             log.warn("PullMessageServiceScheduledThread has shutdown");
         }
     }
-
+    //立即添加
     public void executePullRequestImmediately(final PullRequest pullRequest) {
         try {
             this.pullRequestQueue.put(pullRequest);
@@ -64,7 +64,7 @@ public class PullMessageService extends ServiceThread {
             log.error("executePullRequestImmediately pullRequestQueue.put", e);
         }
     }
-
+    //延迟添加
     public void executeTaskLater(final Runnable r, final long timeDelay) {
         if (!isStopped()) {
             this.scheduledExecutorService.schedule(r, timeDelay, TimeUnit.MILLISECONDS);

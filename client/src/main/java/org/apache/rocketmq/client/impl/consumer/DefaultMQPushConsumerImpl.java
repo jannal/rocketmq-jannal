@@ -410,7 +410,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
 
             classFilter = sd.isClassFilterMode();
         }
-
+        //构建消息拉取系统标记
         int sysFlag = PullSysFlag.buildSysFlag(
             commitOffsetEnable, // commitOffset
             true, // suspend
@@ -427,9 +427,9 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                 this.defaultMQPushConsumer.getPullBatchSize(),
                 sysFlag,
                 commitOffsetValue,
-                BROKER_SUSPEND_MAX_TIME_MILLIS,
-                CONSUMER_TIMEOUT_MILLIS_WHEN_SUSPEND,
-                CommunicationMode.ASYNC,
+                BROKER_SUSPEND_MAX_TIME_MILLIS,//broker挂起的最大时间
+                CONSUMER_TIMEOUT_MILLIS_WHEN_SUSPEND,//消息拉取超时时间
+                CommunicationMode.ASYNC, //默认异步拉取
                 pullCallback
             );
         } catch (Exception e) {

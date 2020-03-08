@@ -239,7 +239,7 @@ public class IndexFile {
                         if (phyOffsets.size() >= maxNum) {
                             break;
                         }
-
+                        //通过slotValue定位物理绝对位置，slotValue存储的是当时总共的索引数量
                         int absIndexPos =
                             IndexHeader.INDEX_HEADER_SIZE + this.hashSlotNum * hashSlotSize
                                 + nextIndexToRead * indexSize;
@@ -249,6 +249,7 @@ public class IndexFile {
                         long phyOffsetRead = this.mappedByteBuffer.getLong(absIndexPos + 4);
 
                         long timeDiff = (long) this.mappedByteBuffer.getInt(absIndexPos + 4 + 8);
+                        //获取上一个soltValue的值
                         int prevIndexRead = this.mappedByteBuffer.getInt(absIndexPos + 4 + 8 + 4);
 
                         if (timeDiff < 0) {
@@ -263,7 +264,7 @@ public class IndexFile {
                         if (keyHash == keyHashRead && timeMatched) {
                             phyOffsets.add(phyOffsetRead);
                         }
-
+                        //如果上一个soltValue=0则跳出循环，结束查找
                         if (prevIndexRead <= invalidIndex
                             || prevIndexRead > this.indexHeader.getIndexCount()
                             || prevIndexRead == nextIndexToRead || timeRead < begin) {

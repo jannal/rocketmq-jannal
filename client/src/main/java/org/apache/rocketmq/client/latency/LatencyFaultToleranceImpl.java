@@ -77,7 +77,10 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
         }
 
         if (!tmpList.isEmpty()) {
-            //FIXME 这个有必要吗？
+            // FIXME 这个有必要吗？ https://github.com/apache/rocketmq/issues/1248
+            // java中Collection.sort()使用了稳定的排序算法，因此在sort()之前使用shuffle()会使选择算法更公平
+            // https://stackoverflow.com/questions/37634260/how-to-shuffle-specific-set-of-elements-in-a-list
+            // 在排序之后，随机地处理具有相同优先级的元素，并保持优先级的一般顺序
             Collections.shuffle(tmpList);
             //排序，可用的在前面
             Collections.sort(tmpList);

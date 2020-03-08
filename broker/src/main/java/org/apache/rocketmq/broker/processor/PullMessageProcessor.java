@@ -86,6 +86,7 @@ public class PullMessageProcessor implements NettyRequestProcessor {
         return false;
     }
 
+    //brokerAllowSuspend 表示Broker是否支持挂起
     private RemotingCommand processRequest(final Channel channel, RemotingCommand request, boolean brokerAllowSuspend)
         throws RemotingCommandException {
         RemotingCommand response = RemotingCommand.createResponseCommand(PullMessageResponseHeader.class);

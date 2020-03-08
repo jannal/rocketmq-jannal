@@ -93,7 +93,7 @@ public class ProducerTest {
             String topic = "testTopic";
             String tag = "TagA";
             String keys = "keys";
-            CountDownLatch countDownLatch = new CountDownLatch(100);
+            final CountDownLatch countDownLatch = new CountDownLatch(100);
             for (int i = 100; i < 200; i++) {
                 String msg = "hello world " + i;
                 Message message = new Message(topic, tag, keys, msg.getBytes(RemotingHelper.DEFAULT_CHARSET));
