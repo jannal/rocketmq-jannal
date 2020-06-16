@@ -69,7 +69,8 @@ public class IndexService {
                 try {
                     IndexFile f = new IndexFile(file.getPath(), this.hashSlotNum, this.indexNum, 0, 0);
                     f.load();
-
+                    //如果上次异常退出，如果当前索引文件的最后时间戳大于检查点（Checkpoint）文件的索引最大时间戳
+                    //则销毁索引文件
                     if (!lastExitOK) {
                         if (f.getEndTimestamp() > this.defaultMessageStore.getStoreCheckpoint()
                             .getIndexMsgTimestamp()) {
