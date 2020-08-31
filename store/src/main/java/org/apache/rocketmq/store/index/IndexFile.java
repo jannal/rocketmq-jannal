@@ -29,10 +29,20 @@ import org.apache.rocketmq.store.MappedFile;
 
 public class IndexFile {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
+    //hash槽大小
     private static int hashSlotSize = 4;
+    //index大小
     private static int indexSize = 20;
     private static int invalidIndex = 0;
+    /**
+     * 槽位，默认500w个
+     * 配置参见org.apache.rocketmq.store.config.MessageStoreConfig#maxHashSlotNum
+     */
     private final int hashSlotNum;
+    /**
+     * 默认2000w
+     * 配置参见org.apache.rocketmq.store.config.MessageStoreConfig#maxIndexNum
+     */
     private final int indexNum;
     private final MappedFile mappedFile;
     private final FileChannel fileChannel;
@@ -41,6 +51,7 @@ public class IndexFile {
 
     public IndexFile(final String fileName, final int hashSlotNum, final int indexNum,
         final long endPhyOffset, final long endTimestamp) throws IOException {
+        //文件大小=indexHeader(40Byte)+HashSlotNum(500w*4Byte)+indexNum(2000w*20Byte)
         int fileTotalSize =
             IndexHeader.INDEX_HEADER_SIZE + (hashSlotNum * hashSlotSize) + (indexNum * indexSize);
         this.mappedFile = new MappedFile(fileName, fileTotalSize);
@@ -91,8 +102,11 @@ public class IndexFile {
 
     public boolean putKey(final String key, final long phyOffset, final long storeTimestamp) {
         if (this.indexHeader.getIndexCount() < this.indexNum) {
+            //计算消息key的hash
             int keyHash = indexKeyHashMethod(key);
+            //根据hash计算solt位置
             int slotPos = keyHash % this.hashSlotNum;
+            //计算solt的实际存储位置
             int absSlotPos = IndexHeader.INDEX_HEADER_SIZE + slotPos * hashSlotSize;
 
             FileLock fileLock = null;
@@ -101,6 +115,10 @@ public class IndexFile {
 
                 // fileLock = this.fileChannel.lock(absSlotPos, hashSlotSize,
                 // false);
+                /**
+                 *  slotValue=0, 当前message的key是该hash值第一个消息索引
+                 *  slotValue>0, 该key hash值上一个消息索引的位置
+                 */
                 int slotValue = this.mappedByteBuffer.getInt(absSlotPos);
                 if (slotValue <= invalidIndex || slotValue > this.indexHeader.getIndexCount()) {
                     slotValue = invalidIndex;
@@ -122,11 +140,16 @@ public class IndexFile {
                     IndexHeader.INDEX_HEADER_SIZE + this.hashSlotNum * hashSlotSize
                         + this.indexHeader.getIndexCount() * indexSize;
 
+                //topic-key(key是消息的key)的Hash值
                 this.mappedByteBuffer.putInt(absIndexPos, keyHash);
+                //commitLog真实的物理位移
                 this.mappedByteBuffer.putLong(absIndexPos + 4, phyOffset);
+                //时间位移，消息的存储时间与Index Header中beginTimestamp的时间差
                 this.mappedByteBuffer.putInt(absIndexPos + 4 + 8, (int) timeDiff);
+                //存储上一slot存的值
                 this.mappedByteBuffer.putInt(absIndexPos + 4 + 8 + 4, slotValue);
 
+                //当前构建的索引总个数
                 this.mappedByteBuffer.putInt(absSlotPos, this.indexHeader.getIndexCount());
 
                 if (this.indexHeader.getIndexCount() <= 1) {
@@ -145,6 +168,7 @@ public class IndexFile {
             } catch (Exception e) {
                 log.error("putKey exception, Key: " + key + " KeyHashCode: " + key.hashCode(), e);
             } finally {
+                //上面注释了，下面可以删除了
                 if (fileLock != null) {
                     try {
                         fileLock.release();
@@ -192,7 +216,9 @@ public class IndexFile {
         final long begin, final long end, boolean lock) {
         if (this.mappedFile.hold()) {
             int keyHash = indexKeyHashMethod(key);
+            //计算slot位置
             int slotPos = keyHash % this.hashSlotNum;
+            //计算slot物理位置
             int absSlotPos = IndexHeader.INDEX_HEADER_SIZE + slotPos * hashSlotSize;
 
             FileLock fileLock = null;
@@ -201,7 +227,7 @@ public class IndexFile {
                     // fileLock = this.fileChannel.lock(absSlotPos,
                     // hashSlotSize, true);
                 }
-
+                //获取slot存放的值，此值是最后一个存放此hash的index下标
                 int slotValue = this.mappedByteBuffer.getInt(absSlotPos);
                 // if (fileLock != null) {
                 // fileLock.release();
@@ -215,15 +241,17 @@ public class IndexFile {
                         if (phyOffsets.size() >= maxNum) {
                             break;
                         }
-
+                        //通过slotValue定位物理绝对位置，slotValue存储的是当时总共的索引数量
                         int absIndexPos =
                             IndexHeader.INDEX_HEADER_SIZE + this.hashSlotNum * hashSlotSize
                                 + nextIndexToRead * indexSize;
-
+                        //获取keyhash
                         int keyHashRead = this.mappedByteBuffer.getInt(absIndexPos);
+                        //物理偏移量
                         long phyOffsetRead = this.mappedByteBuffer.getLong(absIndexPos + 4);
 
                         long timeDiff = (long) this.mappedByteBuffer.getInt(absIndexPos + 4 + 8);
+                        //获取上一个soltValue的值
                         int prevIndexRead = this.mappedByteBuffer.getInt(absIndexPos + 4 + 8 + 4);
 
                         if (timeDiff < 0) {
@@ -234,17 +262,17 @@ public class IndexFile {
 
                         long timeRead = this.indexHeader.getBeginTimestamp() + timeDiff;
                         boolean timeMatched = (timeRead >= begin) && (timeRead <= end);
-
+                        //hash一致并且时间在begin和end之间
                         if (keyHash == keyHashRead && timeMatched) {
                             phyOffsets.add(phyOffsetRead);
                         }
-
+                        //如果上一个soltValue=0则跳出循环，结束查找
                         if (prevIndexRead <= invalidIndex
                             || prevIndexRead > this.indexHeader.getIndexCount()
                             || prevIndexRead == nextIndexToRead || timeRead < begin) {
                             break;
                         }
-
+                        //如果solt不为0则继续读取前一条
                         nextIndexToRead = prevIndexRead;
                     }
                 }

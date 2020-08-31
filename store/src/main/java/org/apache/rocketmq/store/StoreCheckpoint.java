@@ -32,8 +32,11 @@ public class StoreCheckpoint {
     private final RandomAccessFile randomAccessFile;
     private final FileChannel fileChannel;
     private final MappedByteBuffer mappedByteBuffer;
+    //CommitLog最新一条记录的存储时间
     private volatile long physicMsgTimestamp = 0;
+    //ConsumeQueue最新一条记录的存储时间
     private volatile long logicsMsgTimestamp = 0;
+    //最近一个已经写完的index的最后一条记录时间
     private volatile long indexMsgTimestamp = 0;
 
     public StoreCheckpoint(final String scpPath) throws IOException {
@@ -42,6 +45,8 @@ public class StoreCheckpoint {
         boolean fileExists = file.exists();
 
         this.randomAccessFile = new RandomAccessFile(file, "rw");
+        //一旦建立映射（map），fileChannel其实就可以关闭了，关闭fileChannel对映射不会有影响
+        //TODO 所以这个地方的fileChannel是不是直接关闭就好?
         this.fileChannel = this.randomAccessFile.getChannel();
         this.mappedByteBuffer = fileChannel.map(MapMode.READ_WRITE, 0, MappedFile.OS_PAGE_SIZE);
 
@@ -104,7 +109,7 @@ public class StoreCheckpoint {
 
     public long getMinTimestamp() {
         long min = Math.min(this.physicMsgTimestamp, this.logicsMsgTimestamp);
-
+        //TODO 这里为什么要减去3000？
         min -= 1000 * 3;
         if (min < 0)
             min = 0;

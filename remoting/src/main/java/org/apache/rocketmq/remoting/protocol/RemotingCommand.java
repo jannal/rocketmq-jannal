@@ -142,8 +142,11 @@ public class RemotingCommand {
     }
 
     public static RemotingCommand decode(final ByteBuffer byteBuffer) {
+        //总长度
         int length = byteBuffer.limit();
+        //消息头长度(长度=rpc类型8位+头数据长度24位)
         int oriHeaderLen = byteBuffer.getInt();
+        //前8位是rpc类型，后24位才是头数据的长度
         int headerLength = getHeaderLength(oriHeaderLen);
 
         byte[] headerData = new byte[headerLength];
@@ -210,10 +213,13 @@ public class RemotingCommand {
 
     public static byte[] markProtocolType(int source, SerializeType type) {
         byte[] result = new byte[4];
-
+        //序列化类型 24-32位
         result[0] = type.getCode();
+        //右移16位 & 255 16-24位
         result[1] = (byte) ((source >> 16) & 0xFF);
+        //右移8位 & 255  8-16位
         result[2] = (byte) ((source >> 8) & 0xFF);
+        //8-0位
         result[3] = (byte) (source & 0xFF);
         return result;
     }
@@ -327,17 +333,17 @@ public class RemotingCommand {
 
     public ByteBuffer encode() {
         // 1> header length size
-        int length = 4;
+        int length = 4; //消息头长度4字节
 
-        // 2> header data length
+        // 2> header data length  消息头数据长度
         byte[] headerData = this.headerEncode();
         length += headerData.length;
 
-        // 3> body data length
+        // 3> body data length 消息体数据长度
         if (this.body != null) {
             length += body.length;
         }
-
+        //消息总字节数=总长度(4字节)+头长度(4字节)+消息头数据长度+消息体数据长度
         ByteBuffer result = ByteBuffer.allocate(4 + length);
 
         // length

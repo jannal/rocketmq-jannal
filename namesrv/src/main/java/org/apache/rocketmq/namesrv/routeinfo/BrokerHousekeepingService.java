@@ -37,16 +37,19 @@ public class BrokerHousekeepingService implements ChannelEventListener {
 
     @Override
     public void onChannelClose(String remoteAddr, Channel channel) {
+        //通道关闭从RouteInfoManager中移除Broker
         this.namesrvController.getRouteInfoManager().onChannelDestroy(remoteAddr, channel);
     }
 
     @Override
     public void onChannelException(String remoteAddr, Channel channel) {
+        //通道发生异常从RouteInfoManager中移除Broker
         this.namesrvController.getRouteInfoManager().onChannelDestroy(remoteAddr, channel);
     }
 
     @Override
     public void onChannelIdle(String remoteAddr, Channel channel) {
+        //通道失效从RouteInfoManager中移除Broker
         this.namesrvController.getRouteInfoManager().onChannelDestroy(remoteAddr, channel);
     }
 }

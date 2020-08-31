@@ -73,6 +73,7 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
     private final ExecutorService publicExecutor;
     private final ChannelEventListener channelEventListener;
 
+
     private final Timer timer = new Timer("ServerHouseKeepingService", true);
     private DefaultEventExecutorGroup defaultEventExecutorGroup;
 

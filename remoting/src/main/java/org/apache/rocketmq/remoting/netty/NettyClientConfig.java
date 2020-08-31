@@ -22,9 +22,13 @@ public class NettyClientConfig {
      */
     private int clientWorkerThreads = 4;
     private int clientCallbackExecutorThreads = Runtime.getRuntime().availableProcessors();
+    //用于控制同时单程调用的请求个数，默认65535，防止调用太快
     private int clientOnewaySemaphoreValue = NettySystemConfig.CLIENT_ONEWAY_SEMAPHORE_VALUE;
+    //用于控制同时异步调用的请求个数，默认65535
     private int clientAsyncSemaphoreValue = NettySystemConfig.CLIENT_ASYNC_SEMAPHORE_VALUE;
+    //客户端连接超时时间
     private int connectTimeoutMillis = 3000;
+    //在当前版本没有用到这个参数？难道是忘记了？
     private long channelNotActiveInterval = 1000 * 60;
 
     /**
@@ -33,9 +37,13 @@ public class NettyClientConfig {
      */
     private int clientChannelMaxIdleTimeSeconds = 120;
 
+    //客户端发送缓冲区默认65535
     private int clientSocketSndBufSize = NettySystemConfig.socketSndbufSize;
+    //客户端接收缓冲区默认65535
     private int clientSocketRcvBufSize = NettySystemConfig.socketRcvbufSize;
+    //是否使用ByteBuf内存池，netty默认使用PooledByteBufAllocator，客户端默认false
     private boolean clientPooledByteBufAllocatorEnable = false;
+    //客户端同步调用超时后是否关闭Socket，默认false
     private boolean clientCloseSocketIfTimeout = false;
 
     private boolean useTLS;

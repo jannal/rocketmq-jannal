@@ -20,8 +20,11 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public abstract class ReferenceResource {
     protected final AtomicLong refCount = new AtomicLong(1);
+    //是否可用
     protected volatile boolean available = true;
+    //是否清理完毕
     protected volatile boolean cleanupOver = false;
+    //第一次执行shutdown的时间
     private volatile long firstShutdownTimestamp = 0;
 
     public synchronized boolean hold() {
@@ -59,7 +62,7 @@ public abstract class ReferenceResource {
             return;
 
         synchronized (this) {
-
+            //如果引用计数等于0，则执行清理堆外内存
             this.cleanupOver = this.cleanup(value);
         }
     }

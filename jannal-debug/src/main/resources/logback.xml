@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration debug="false" scan="true" scanPeriod="1000 seconds">
+    <timestamp key="date" datePattern="yyyyMMdd"/>
+    <property name="LOG_HOME" value="/Volumes/O/logs/mq"/>
+    <appender name="log-consoleAppender" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} %level %c:%L - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <logger name="org.springframework" level="info"/>
+    <logger name="org.apache" level="info"/>
+    <logger name="org.slf4j" level="DEBUG"/>
+
+    <root level="DEBUG">
+        <appender-ref ref="log-consoleAppender"/>
+    </root>
+</configuration>

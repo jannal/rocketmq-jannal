@@ -31,6 +31,7 @@ public class PullMessageService extends ServiceThread {
     private final InternalLogger log = ClientLogger.getLog();
     private final LinkedBlockingQueue<PullRequest> pullRequestQueue = new LinkedBlockingQueue<PullRequest>();
     private final MQClientInstance mQClientFactory;
+    //主要用于延迟添加pullRequest
     private final ScheduledExecutorService scheduledExecutorService = Executors
         .newSingleThreadScheduledExecutor(new ThreadFactory() {
             @Override
@@ -55,7 +56,7 @@ public class PullMessageService extends ServiceThread {
             log.warn("PullMessageServiceScheduledThread has shutdown");
         }
     }
-
+    //立即添加
     public void executePullRequestImmediately(final PullRequest pullRequest) {
         try {
             this.pullRequestQueue.put(pullRequest);
@@ -63,7 +64,7 @@ public class PullMessageService extends ServiceThread {
             log.error("executePullRequestImmediately pullRequestQueue.put", e);
         }
     }
-
+    //延迟添加
     public void executeTaskLater(final Runnable r, final long timeDelay) {
         if (!isStopped()) {
             this.scheduledExecutorService.schedule(r, timeDelay, TimeUnit.MILLISECONDS);
@@ -92,7 +93,9 @@ public class PullMessageService extends ServiceThread {
 
         while (!this.isStopped()) {
             try {
+                //从队列中获取一个PullRequest，如果队列为空，则阻塞，直到队列中被放入PullRequest
                 PullRequest pullRequest = this.pullRequestQueue.take();
+                //将PullRequest添加到DefaultMQPushConsumerImpl
                 this.pullMessage(pullRequest);
             } catch (InterruptedException ignored) {
             } catch (Exception e) {

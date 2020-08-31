@@ -63,8 +63,10 @@ public class NamesrvController {
     public NamesrvController(NamesrvConfig namesrvConfig, NettyServerConfig nettyServerConfig) {
         this.namesrvConfig = namesrvConfig;
         this.nettyServerConfig = nettyServerConfig;
+        //此处其实本身没有传递NamesrvController对象的必要呀，直接传递getKvConfigPath()路径不就行了？
         this.kvConfigManager = new KVConfigManager(this);
         this.routeInfoManager = new RouteInfoManager();
+        //BrokerHousekeepingService既然是委托RouteInfoManager处理，为什么不直接传递RouteInfoManager呢？
         this.brokerHousekeepingService = new BrokerHousekeepingService(this);
         this.configuration = new Configuration(
             log,
@@ -75,15 +77,19 @@ public class NamesrvController {
 
     public boolean initialize() {
 
+        //从文件中加载数据到内存中，默认从${user.home}/namesrv/kvConfig.json文件加载
         this.kvConfigManager.load();
-
+        //创建服务Server，传入处理连接的ChannelEventListener
         this.remotingServer = new NettyRemotingServer(this.nettyServerConfig, this.brokerHousekeepingService);
 
+        //默认任务处理器的线程池，每一个RequestCode可以单独设置一个线程池，如果不设置就使用默认的线程池
         this.remotingExecutor =
             Executors.newFixedThreadPool(nettyServerConfig.getServerWorkerThreads(), new ThreadFactoryImpl("RemotingExecutorThread_"));
 
+        //注册默认处理器，根据requestCode执行相应的处理
         this.registerProcessor();
 
+        //启动后延迟5秒开始执行，每隔10秒执行一次，对于两分钟没有活跃的broker，关闭连接
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -92,6 +98,7 @@ public class NamesrvController {
             }
         }, 5, 10, TimeUnit.SECONDS);
 
+        //启动后延迟1min，每隔10分钟执行打印configTable
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override

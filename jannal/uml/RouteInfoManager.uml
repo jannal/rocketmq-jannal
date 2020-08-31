@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Diagram>
+  <ID>JAVA</ID>
+  <OriginalElement>org.apache.rocketmq.namesrv.kvconfig</OriginalElement>
+  <nodes>
+    <node x="0.0" y="0.0">org.apache.rocketmq.common.protocol.route.QueueData</node>
+    <node x="216.0" y="11.0">org.apache.rocketmq.namesrv.routeinfo.BrokerLiveInfo</node>
+    <node x="471.0" y="11.0">org.apache.rocketmq.common.protocol.route.BrokerData</node>
+    <node x="131.99999999999994" y="200.0">org.apache.rocketmq.namesrv.routeinfo.RouteInfoManager</node>
+  </nodes>
+  <notes />
+  <edges />
+  <settings layout="Hierarchic Group" zoom="1.0" x="374.0" y="202.0" />
+  <SelectedNodes>
+    <node>org.apache.rocketmq.common.protocol.route.BrokerData</node>
+  </SelectedNodes>
+  <Categories>
+    <Category>Fields</Category>
+  </Categories>
+  <SCOPE>All</SCOPE>
+  <VISIBILITY>private</VISIBILITY>
+</Diagram>
+

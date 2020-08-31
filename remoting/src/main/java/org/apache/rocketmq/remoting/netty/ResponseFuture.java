@@ -25,13 +25,16 @@ import org.apache.rocketmq.remoting.common.SemaphoreReleaseOnlyOnce;
 import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 
 public class ResponseFuture {
+    //请求携带的id，也是响应后返回的id
     private final int opaque;
     private final Channel processChannel;
+    //响应超时时间
     private final long timeoutMillis;
+    //回调函数
     private final InvokeCallback invokeCallback;
     private final long beginTimestamp = System.currentTimeMillis();
     private final CountDownLatch countDownLatch = new CountDownLatch(1);
-
+    //信号量封装，确保信号量只被释放一次
     private final SemaphoreReleaseOnlyOnce once;
 
     private final AtomicBoolean executeCallbackOnlyOnce = new AtomicBoolean(false);

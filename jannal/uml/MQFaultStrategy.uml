@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Diagram>
+  <ID>JAVA</ID>
+  <OriginalElement>org.apache.rocketmq.client.latency.MQFaultStrategy</OriginalElement>
+  <nodes>
+    <node x="31.5" y="354.0">org.apache.rocketmq.client.latency.LatencyFaultToleranceImpl.FaultItem</node>
+    <node x="337.0" y="0.0">org.apache.rocketmq.client.latency.MQFaultStrategy</node>
+    <node x="0.0" y="166.0">org.apache.rocketmq.client.latency.LatencyFaultToleranceImpl</node>
+    <node x="14.5" y="0.0">org.apache.rocketmq.client.latency.LatencyFaultTolerance</node>
+  </nodes>
+  <notes />
+  <edges>
+    <edge source="org.apache.rocketmq.client.latency.LatencyFaultToleranceImpl" target="org.apache.rocketmq.client.latency.LatencyFaultTolerance">
+      <point x="0.0" y="-69.0" />
+      <point x="0.0" y="58.0" />
+    </edge>
+    <edge source="org.apache.rocketmq.client.latency.LatencyFaultToleranceImpl.FaultItem" target="org.apache.rocketmq.client.latency.LatencyFaultToleranceImpl">
+      <point x="0.0" y="-135.5" />
+      <point x="0.0" y="69.0" />
+    </edge>
+  </edges>
+  <settings layout="Hierarchic Group" zoom="1.0" x="397.0" y="312.5" />
+  <SelectedNodes />
+  <Categories>
+    <Category>Constructors</Category>
+    <Category>Methods</Category>
+    <Category>Inner Classes</Category>
+  </Categories>
+  <SCOPE>All</SCOPE>
+  <VISIBILITY>private</VISIBILITY>
+</Diagram>
+

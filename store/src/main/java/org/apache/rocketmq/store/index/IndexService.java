@@ -36,12 +36,16 @@ import org.apache.rocketmq.store.config.StorePathConfigHelper;
 public class IndexService {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
     /**
-     * Maximum times to attempt index file creation.
+     * maximum times to attempt index file creation.
+     * 尝试创建Index File的最大次数
      */
     private static final int MAX_TRY_IDX_CREATE = 3;
     private final DefaultMessageStore defaultMessageStore;
+    //hash槽的数量
     private final int hashSlotNum;
+    //index的数量
     private final int indexNum;
+    //存储路径
     private final String storePath;
     private final ArrayList<IndexFile> indexFileList = new ArrayList<IndexFile>();
     private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
@@ -59,12 +63,14 @@ public class IndexService {
         File[] files = dir.listFiles();
         if (files != null) {
             // ascending order
+            //按照文件名升序排序
             Arrays.sort(files);
             for (File file : files) {
                 try {
                     IndexFile f = new IndexFile(file.getPath(), this.hashSlotNum, this.indexNum, 0, 0);
                     f.load();
-
+                    //如果上次异常退出，如果当前索引文件的最后时间戳大于检查点（Checkpoint）文件的索引最大时间戳
+                    //则销毁索引文件
                     if (!lastExitOK) {
                         if (f.getEndTimestamp() > this.defaultMessageStore.getStoreCheckpoint()
                             .getIndexMsgTimestamp()) {
