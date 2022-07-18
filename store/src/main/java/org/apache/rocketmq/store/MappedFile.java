@@ -67,16 +67,18 @@ public class MappedFile extends ReferenceResource {
     protected FileChannel fileChannel;
     /**
      * Message will put to here first, and then reput to FileChannel if writeBuffer is not null.
+     * 堆外内存ByteBuffer，如果不为空（transientStorePoolEnable=true），数据受限将存储在buffer中，然后提交到FileChannel
      */
     protected ByteBuffer writeBuffer = null;
-    //堆外线程池
+    //堆外内存池，内存池中的内存会提供内存锁机制
     protected TransientStorePool transientStorePool = null;
     private String fileName;
     //映射的起始偏移量，也是文件名
     private long fileFromOffset;
+    //磁盘的物理文件
     private File file;
     private MappedByteBuffer mappedByteBuffer;
-    //文件最后一次写入时间
+    //文件最后一次写入的时间戳
     private volatile long storeTimestamp = 0;
     //是否是MappedFileQueue中的第一个文件
     private boolean firstCreateInQueue = false;
@@ -178,6 +180,8 @@ public class MappedFile extends ReferenceResource {
     public void init(final String fileName, final int fileSize,
         final TransientStorePool transientStorePool) throws IOException {
         init(fileName, fileSize);
+        //如果transientStorePoolEnable为true，则初始化MappedFile的
+        //writeBuffer，该buffer从transientStorePool中获取
         this.writeBuffer = transientStorePool.borrowBuffer();
         this.transientStorePool = transientStorePool;
     }
@@ -553,6 +557,7 @@ public class MappedFile extends ReferenceResource {
      * @return The max position which have valid data
      */
     public int getReadPosition() {
+        // 如果writeBuffer不为空，则应为上一次commit的指针，如果不为空，则为写入位置
         return this.writeBuffer == null ? this.wrotePosition.get() : this.committedPosition.get();
     }
 
@@ -563,9 +568,9 @@ public class MappedFile extends ReferenceResource {
     /**
      * 1. 对当前映射文件进行预热
      *   1.1. 先对当前映射文件的每个内存页写入一个字节0.当刷盘策略为同步刷盘时，执行强制刷盘，并且是每修改pages个分页刷一次盘
-     *  再将当前MappedFile全部的地址空间锁定，防止被swap
+     *        再将当前MappedFile全部的地址空间锁定，防止被swap
      *   1.2. 然后将当前MappedFile全部的地址空间锁定在物理存储中，防止其被交换到swap空间。再调用madvise，传入 WILL_NEED 策略，将刚刚锁住的内存预热，其实就是告诉内核，
-     *  我马上就要用（WILL_NEED）这块内存，先做虚拟内存到物理内存的映射，防止正式使用时产生缺页中断。
+     *        我马上就要用（WILL_NEED）这块内存，先做虚拟内存到物理内存的映射，防止正式使用时产生缺页中断。
      *  2. 只要启用缓存预热，都会通过mappedByteBuffer来写入假值(字节0)，并且都会对mappedByteBuffer执行mlock和madvise。
      * @param type 刷盘策略
      * @param pages 预热时一次刷盘的分页数

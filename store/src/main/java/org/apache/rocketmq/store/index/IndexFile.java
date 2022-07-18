@@ -277,6 +277,7 @@ public class IndexFile {
             } catch (Exception e) {
                 log.error("selectPhyOffset exception ", e);
             } finally {
+                //上面注释了，可以删除了
                 if (fileLock != null) {
                     try {
                         fileLock.release();

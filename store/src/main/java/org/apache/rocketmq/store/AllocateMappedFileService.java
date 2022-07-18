@@ -38,10 +38,11 @@ public class AllocateMappedFileService extends ServiceThread {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
     //等待创建MappedFile的超时时间，默认5秒
     private static int waitTimeOut = 1000 * 5;
-    //用来保存当前所有待处理的分配请求，其中KEY是filePath,VALUE是分配请求AllocateRequest。
+    //用来保存当前所有待处理的分配请求，其中key是filePath,value是分配请求AllocateRequest。
     //如果分配请求被成功处理，即获取到映射文件则从请求会从requestTable中移除
     private ConcurrentMap<String, AllocateRequest> requestTable =
         new ConcurrentHashMap<String, AllocateRequest>();
+    //优先级队列，文件越大越优先，文件的offset越小越优先
     private PriorityBlockingQueue<AllocateRequest> requestQueue =
         new PriorityBlockingQueue<AllocateRequest>();
     //创建MappedFile是否有异常
@@ -53,7 +54,7 @@ public class AllocateMappedFileService extends ServiceThread {
     }
 
     /**
-     * 提交mapfile的创建请求 。 包含下一个 和下下个mapfile .
+     * 提交MappedFile的创建请求。包含下一个和下下个MappedFile.
      * @param nextFilePath  下一个文件的路径
      * @param nextNextFilePath 下下个文件的路径
      * @param fileSize
@@ -61,6 +62,7 @@ public class AllocateMappedFileService extends ServiceThread {
      */
     public MappedFile putRequestAndReturnMappedFile(String nextFilePath, String nextNextFilePath, int fileSize) {
         int canSubmitRequests = 2;
+        //启用堆外内存
         if (this.messageStore.getMessageStoreConfig().isTransientStorePoolEnable()) {
             //快速失败策略时
             if (this.messageStore.getMessageStoreConfig().isFastFailIfNoBufferInStorePool()
@@ -75,6 +77,7 @@ public class AllocateMappedFileService extends ServiceThread {
         boolean nextPutOK = this.requestTable.putIfAbsent(nextFilePath, nextReq) == null;
 
         if (nextPutOK) {
+            //TransientStorePool 不足，不能创建，直接返回null
             if (canSubmitRequests <= 0) {
                 log.warn("[NOTIFYME]TransientStorePool is not enough, so create mapped file error, " +
                     "RequestQueueSize : {}, StorePoolSize: {}", this.requestQueue.size(), this.messageStore.getTransientStorePool().remainBufferNumbs());
@@ -105,7 +108,7 @@ public class AllocateMappedFileService extends ServiceThread {
                 }
             }
         }
-
+        // mmapOperation已经执行完成，并且创建MappedFile有异常
         if (hasException) {
             log.warn(this.getServiceName() + " service has exception. so return null");
             return null;
@@ -114,8 +117,9 @@ public class AllocateMappedFileService extends ServiceThread {
         AllocateRequest result = this.requestTable.get(nextFilePath);
         try {
             if (result != null) {
-                //默认5s
+                //默认5s，等待run方法中的mmapOperation执行释放countDown
                 boolean waitOK = result.getCountDownLatch().await(waitTimeOut, TimeUnit.MILLISECONDS);
+                // 超时直接返回null（此时不移除requestTable，下次可直接直接到wait这里，上面的缓存put无需再次执行）
                 if (!waitOK) {
                     log.warn("create mmap timeout " + result.getFilePath() + " " + result.getFileSize());
                     return null;
@@ -197,6 +201,7 @@ public class AllocateMappedFileService extends ServiceThread {
                 long beginTime = System.currentTimeMillis();
 
                 MappedFile mappedFile;
+                //堆外内存
                 if (messageStore.getMessageStoreConfig().isTransientStorePoolEnable()) {
                     try {
                         mappedFile = ServiceLoader.load(MappedFile.class).iterator().next();
@@ -257,6 +262,7 @@ public class AllocateMappedFileService extends ServiceThread {
         // Full file path
         private String filePath;
         private int fileSize;
+        //为0表示MappedFile创建完成
         private CountDownLatch countDownLatch = new CountDownLatch(1);
         private volatile MappedFile mappedFile = null;
 
@@ -297,6 +303,9 @@ public class AllocateMappedFileService extends ServiceThread {
             this.mappedFile = mappedFile;
         }
 
+        /**
+         * fileSize大的优先级高，文件大小相同，文件的offset越小优先级越高
+         */
         public int compareTo(AllocateRequest other) {
             if (this.fileSize < other.fileSize)
                 return 1;

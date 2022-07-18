@@ -1,0 +1,1 @@
+mvn -Prelease-all -DskipTests -Dcheckstyle.skip=true clean install -U  --settings /Users/jannal/.m2/settings_aliyun.xml

@@ -839,8 +839,10 @@ public class CommitLog {
     }
 
     public long getMinOffset() {
+        // 获取目录的第一个文件
         MappedFile mappedFile = this.mappedFileQueue.getFirstMappedFile();
         if (mappedFile != null) {
+            // 如果可用，则返回该文件的起始偏移量，否则返回下一个文件的起始偏移量
             if (mappedFile.isAvailable()) {
                 return mappedFile.getFileFromOffset();
             } else {
@@ -853,15 +855,19 @@ public class CommitLog {
 
     public SelectMappedBufferResult getMessage(final long offset, final int size) {
         int mappedFileSize = this.defaultMessageStore.getMessageStoreConfig().getMapedFileSizeCommitLog();
+        // 找到文件所在的物理偏移量
         MappedFile mappedFile = this.mappedFileQueue.findMappedFileByOffset(offset, offset == 0);
         if (mappedFile != null) {
+            // offset与文件长度取余，获取到文件内的偏移量
             int pos = (int) (offset % mappedFileSize);
+            //从该偏移量读取size长度的内容并返回
             return mappedFile.selectMappedBuffer(pos, size);
         }
         return null;
     }
 
     public long rollNextFile(final long offset) {
+        // 根据offset返回下一个文件的起始偏移量
         int mappedFileSize = this.defaultMessageStore.getMessageStoreConfig().getMapedFileSizeCommitLog();
         return offset + mappedFileSize - offset % mappedFileSize;
     }
@@ -941,12 +947,12 @@ public class CommitLog {
         public void run() {
             CommitLog.log.info(this.getServiceName() + " service started");
             while (!this.isStopped()) {
-                //默认200ms
+                //线程间隔时间，默认200ms
                 int interval = CommitLog.this.defaultMessageStore.getMessageStoreConfig().getCommitIntervalCommitLog();
-                //默认4页(4k*4)
+                //一次提交至少包含的页，默认4页(4k*4)
                 int commitDataLeastPages = CommitLog.this.defaultMessageStore.getMessageStoreConfig().getCommitCommitLogLeastPages();
 
-                //默认200ms
+                //两次提交数据的时间间隔，默认200ms
                 int commitDataThoroughInterval =
                     CommitLog.this.defaultMessageStore.getMessageStoreConfig().getCommitCommitLogThoroughInterval();
 
@@ -954,6 +960,7 @@ public class CommitLog {
                 long begin = System.currentTimeMillis();
                 if (begin >= (this.lastCommitTimestamp + commitDataThoroughInterval)) {
                     this.lastCommitTimestamp = begin;
+                    //设置为0，表示立即提交
                     commitDataLeastPages = 0;
                 }
 
@@ -964,6 +971,7 @@ public class CommitLog {
                     if (!result) {
                         this.lastCommitTimestamp = end; // result = false means some data committed.
                         //now wake up flush thread.
+                        //唤醒FlushRealTimeService进行刷盘
                         flushCommitLogService.wakeup();
                     }
 
@@ -1027,6 +1035,7 @@ public class CommitLog {
                     if (flushCommitLogTimed) {
                         Thread.sleep(interval);
                     } else {
+                        //等待500ms
                         this.waitForRunning(interval);
                     }
 
@@ -1035,6 +1044,7 @@ public class CommitLog {
                     }
 
                     long begin = System.currentTimeMillis();
+                    //执行刷盘
                     CommitLog.this.mappedFileQueue.flush(flushPhysicQueueLeastPages);
                     long storeTimestamp = CommitLog.this.mappedFileQueue.getStoreTimestamp();
                     if (storeTimestamp > 0) {
@@ -1081,6 +1091,7 @@ public class CommitLog {
     public static class GroupCommitRequest {
         private final long nextOffset;
         private final CountDownLatch countDownLatch = new CountDownLatch(1);
+        //刷盘结果
         private volatile boolean flushOK = false;
 
         public GroupCommitRequest(long nextOffset) {
@@ -1091,11 +1102,14 @@ public class CommitLog {
             return nextOffset;
         }
 
+        //唤醒阻塞等待的线程
+        //FIXME by jannal 此处有并发问题，this.flushOK = flushOK不是原子操作。正常需要加同步
+        //由于只有一个线程操作，所以即使不是原子性也问题不大
         public void wakeupCustomer(final boolean flushOK) {
             this.flushOK = flushOK;
             this.countDownLatch.countDown();
         }
-
+        //等待刷盘
         public boolean waitForFlush(long timeout) {
             try {
                 this.countDownLatch.await(timeout, TimeUnit.MILLISECONDS);
@@ -1111,20 +1125,27 @@ public class CommitLog {
      * GroupCommit Service
      */
     class GroupCommitService extends FlushCommitLogService {
+        //读写容器
         private volatile List<GroupCommitRequest> requestsWrite = new ArrayList<GroupCommitRequest>();
         private volatile List<GroupCommitRequest> requestsRead = new ArrayList<GroupCommitRequest>();
 
         public synchronized void putRequest(final GroupCommitRequest request) {
+            //FIXME by jannal 思考：既然方法已经加锁，为什么此处需要再次加锁？
+            //swapRequests可能在其他线程并发执行，所以需要给requestsWrite单独加锁
+            //swapRequests导致requestsWrite的引用变化，会不会出现问题？
+            //可以将swapRequests加一个与操作requestsWrite的锁，来优化此处代码，避免不好理解
             synchronized (this.requestsWrite) {
                 this.requestsWrite.add(request);
             }
-            //直接调用父类的this.wakeUp()多好?
+            // 通知服务线程已经接收到GroupCommitRequest
+            //FIXME 直接调用父类的this.wakeUp()多好?
             if (hasNotified.compareAndSet(false, true)) {
                 waitPoint.countDown(); // notify
             }
         }
 
         private void swapRequests() {
+            // volatile可以保证可见性，requestsWrite写入时加锁了，所以此处无需加锁，通过volatile可以实现低开销的读
             List<GroupCommitRequest> tmp = this.requestsWrite;
             this.requestsWrite = this.requestsRead;
             this.requestsRead = tmp;
@@ -1154,6 +1175,8 @@ public class CommitLog {
 
                     long storeTimestamp = CommitLog.this.mappedFileQueue.getStoreTimestamp();
                     if (storeTimestamp > 0) {
+                        //更新刷盘检测点StoreCheckpoint中的physicMsg Timestamp
+                        //刷盘检测点的刷盘操作将在刷写消息队列文件时触发
                         CommitLog.this.defaultMessageStore.getStoreCheckpoint().setPhysicMsgTimestamp(storeTimestamp);
                     }
 
@@ -1171,6 +1194,7 @@ public class CommitLog {
 
             while (!this.isStopped()) {
                 try {
+                    //调用swapRequests=>doCommit
                     this.waitForRunning(10);
                     this.doCommit();
                 } catch (Exception e) {
@@ -1185,7 +1209,7 @@ public class CommitLog {
             } catch (InterruptedException e) {
                 CommitLog.log.warn("GroupCommitService Exception, ", e);
             }
-
+            //FIXME by jannal 上面没有加锁，这里为啥加锁？
             synchronized (this) {
                 this.swapRequests();
             }

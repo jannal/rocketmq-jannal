@@ -31,16 +31,23 @@ public class ConsumeQueue {
     private static final InternalLogger LOG_ERROR = InternalLoggerFactory.getLogger(LoggerName.STORE_ERROR_LOGGER_NAME);
 
     private final DefaultMessageStore defaultMessageStore;
-
+    //映射文件队列，管理ConsumeQueue
     private final MappedFileQueue mappedFileQueue;
+    // 消息topic
     private final String topic;
+    // 消息队列Id
     private final int queueId;
+    //指定大小的缓冲，记录的大小是20byte的固定大小
     private final ByteBuffer byteBufferIndex;
-
+    //保存的路径
     private final String storePath;
+    //映射文件的大小
     private final int mappedFileSize;
+    //最后一个消息对应的物理偏移量  也就是在CommitLog中的偏移量
     private long maxPhysicOffset = -1;
+    //最小的逻辑偏移量 在ConsumeQueue中的最小偏移量
     private volatile long minLogicOffset = 0;
+    //ConsumeQueue的扩展文件
     private ConsumeQueueExt consumeQueueExt = null;
 
     public ConsumeQueue(
@@ -63,7 +70,7 @@ public class ConsumeQueue {
         this.mappedFileQueue = new MappedFileQueue(queueDir, mappedFileSize, null);
         //分配一个存储单元大小（20B）的缓冲区
         this.byteBufferIndex = ByteBuffer.allocate(CQ_STORE_UNIT_SIZE);
-
+        //是否启用消息队列的扩展存储
         if (defaultMessageStore.getMessageStoreConfig().isEnableConsumeQueueExt()) {
             this.consumeQueueExt = new ConsumeQueueExt(
                 topic,
@@ -78,6 +85,7 @@ public class ConsumeQueue {
     public boolean load() {
         boolean result = this.mappedFileQueue.load();
         log.info("load consume queue " + this.topic + "-" + this.queueId + " " + (result ? "OK" : "Failed"));
+        //扩展存储存在则加载
         if (isExtReadEnable()) {
             result &= this.consumeQueueExt.load();
         }
@@ -87,25 +95,30 @@ public class ConsumeQueue {
     public void recover() {
         final List<MappedFile> mappedFiles = this.mappedFileQueue.getMappedFiles();
         if (!mappedFiles.isEmpty()) {
-
+            //如果文件列表大于3就从倒数第3个开始，否则从第一个开始
             int index = mappedFiles.size() - 3;
             if (index < 0)
                 index = 0;
-
+            //获取consumeQueue单个文件的大小
             int mappedFileSizeLogics = this.mappedFileSize;
+            //获取index对应的映射文件
             MappedFile mappedFile = mappedFiles.get(index);
             ByteBuffer byteBuffer = mappedFile.sliceByteBuffer();
+            //映射文件的起始偏移量（也是文件名）
             long processOffset = mappedFile.getFileFromOffset();
             long mappedFileOffset = 0;
             long maxExtAddr = 1;
             while (true) {
+                //遍历文件中的所有数据（20个字节一次遍历）
                 for (int i = 0; i < mappedFileSizeLogics; i += CQ_STORE_UNIT_SIZE) {
                     long offset = byteBuffer.getLong();
                     int size = byteBuffer.getInt();
                     long tagsCode = byteBuffer.getLong();
-
+                    //顺序解析，每个数据单元隔20个字节,如果offset跟size大于0则表示有效
                     if (offset >= 0 && size > 0) {
+                        //正常数据的大小
                         mappedFileOffset = i + CQ_STORE_UNIT_SIZE;
+                        //设置最大的物理偏移量
                         this.maxPhysicOffset = offset;
                         if (isExtAddr(tagsCode)) {
                             maxExtAddr = tagsCode;
@@ -116,15 +129,17 @@ public class ConsumeQueue {
                         break;
                     }
                 }
-
+                //文件加载完毕
                 if (mappedFileOffset == mappedFileSizeLogics) {
                     index++;
+                    // 完成加载跳出循环
                     if (index >= mappedFiles.size()) {
 
                         log.info("recover last consume queue file over, last mapped file "
                             + mappedFile.getFileName());
                         break;
                     } else {
+                        //下一个文件，继续循环读取
                         mappedFile = mappedFiles.get(index);
                         byteBuffer = mappedFile.sliceByteBuffer();
                         processOffset = mappedFile.getFileFromOffset();
@@ -137,12 +152,14 @@ public class ConsumeQueue {
                     break;
                 }
             }
-
+            // 最后一个文件的起始偏移量+正常数据的长度
             processOffset += mappedFileOffset;
+            //设置flush和commit偏移量位置
             this.mappedFileQueue.setFlushedWhere(processOffset);
             this.mappedFileQueue.setCommittedWhere(processOffset);
+            //删除有效的 offset 之后的文件（后面的是无效的，需要删除掉）
             this.mappedFileQueue.truncateDirtyFiles(processOffset);
-
+            //如果有扩展文件，则恢复扩展文件
             if (isExtReadEnable()) {
                 this.consumeQueueExt.recover();
                 log.info("Truncate consume queue extend file by max {}", maxExtAddr);
@@ -151,10 +168,13 @@ public class ConsumeQueue {
         }
     }
 
+    //根据时间获取消息在队列中的逻辑位置
     public long getOffsetInQueueByTime(final long timestamp) {
+        //根据时间找到映射的文件,通过文件修改时间判断
         MappedFile mappedFile = this.mappedFileQueue.getMappedFileByTime(timestamp);
         if (mappedFile != null) {
             long offset = 0;
+            //如果文件的最小偏移量 大于 查找的时间戳所在的文件的起始偏移量 说明对应的消息在这个文件中。
             int low = minLogicOffset > mappedFile.getFileFromOffset() ? (int) (minLogicOffset - mappedFile.getFileFromOffset()) : 0;
             int high = 0;
             int midOffset = -1, targetOffset = -1, leftOffset = -1, rightOffset = -1;
@@ -165,6 +185,7 @@ public class ConsumeQueue {
                 ByteBuffer byteBuffer = sbr.getByteBuffer();
                 high = byteBuffer.limit() - CQ_STORE_UNIT_SIZE;
                 try {
+                    // 二分查找
                     while (high >= low) {
                         midOffset = (low + high) / (2 * CQ_STORE_UNIT_SIZE) * CQ_STORE_UNIT_SIZE;
                         byteBuffer.position(midOffset);
@@ -426,6 +447,7 @@ public class ConsumeQueue {
         final long cqOffset) {
 
         //maxPhysicOffset记录了上一次ConsumeQueue更新的消息在CommitLog中的偏移量
+        // 如果消息已经被处理，则直接返回true
         if (offset <= this.maxPhysicOffset) {
             return true;
         }
@@ -433,12 +455,12 @@ public class ConsumeQueue {
         this.byteBufferIndex.flip();
         //20byte
         this.byteBufferIndex.limit(CQ_STORE_UNIT_SIZE);
-        this.byteBufferIndex.putLong(offset);
-        this.byteBufferIndex.putInt(size);
-        this.byteBufferIndex.putLong(tagsCode);
+        this.byteBufferIndex.putLong(offset);//写入消息偏移量
+        this.byteBufferIndex.putInt(size);//写入消息长度
+        this.byteBufferIndex.putLong(tagsCode);//写入tag hashcode
         //cqOffset为ConsumerQueue中记录了偏移量总数
         final long expectLogicOffset = cqOffset * CQ_STORE_UNIT_SIZE;
-        //获取ConsumeQueue当前对应的MappedFile
+        //获取ConsumeQueue当前对应的MappedFile，ConsumeQueue本身也是通过MappedFileQueue来管理的
         MappedFile mappedFile = this.mappedFileQueue.getLastMappedFile(expectLogicOffset);
         if (mappedFile != null) {
             //对于新建的文件，填充0来预热PageCache
@@ -453,7 +475,7 @@ public class ConsumeQueue {
 
             if (cqOffset != 0) {
                 long currentLogicOffset = mappedFile.getWrotePosition() + mappedFile.getFileFromOffset();
-
+                //说明已经处理过
                 if (expectLogicOffset < currentLogicOffset) {
                     log.warn("Build  consume queue repeatedly, expectLogicOffset: {} currentLogicOffset: {} Topic: {} QID: {} Diff: {}",
                         expectLogicOffset, currentLogicOffset, this.topic, this.queueId, expectLogicOffset - currentLogicOffset);
@@ -471,6 +493,7 @@ public class ConsumeQueue {
                     );
                 }
             }
+            //更新物理偏移量，追加到MappedFile。如果appendMessage追加失败了,等下次继续追加，所以这里可以直接给maxPhysicOffset赋值，不用关心是否追加成功
             this.maxPhysicOffset = offset;
             return mappedFile.appendMessage(this.byteBufferIndex.array());
         }
