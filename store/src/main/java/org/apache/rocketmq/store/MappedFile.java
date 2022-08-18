@@ -484,10 +484,14 @@ public class MappedFile extends ReferenceResource {
         int readPosition = getReadPosition();
         if (pos < readPosition && pos >= 0) {
             if (this.hold()) {
+                //切片（数据范围：0~limit）
                 ByteBuffer byteBuffer = this.mappedByteBuffer.slice();
+                //切片（数据范围position~limit）
                 byteBuffer.position(pos);
                 int size = readPosition - pos;
+                //再次切片（数据范围：position~limit）
                 ByteBuffer byteBufferNew = byteBuffer.slice();
+                //设定limit（数据范围：position~position+size）
                 byteBufferNew.limit(size);
                 return new SelectMappedBufferResult(this.fileFromOffset + pos, byteBufferNew, size, this);
             }
@@ -520,13 +524,15 @@ public class MappedFile extends ReferenceResource {
 
     public boolean destroy(final long intervalForcibly) {
         this.shutdown(intervalForcibly);
-
+        // 清理结束（判断引用是否清除）
         if (this.isCleanupOver()) {
             try {
+                // 关闭channel
                 this.fileChannel.close();
                 log.info("close file channel " + this.fileName + " OK");
 
                 long beginTime = System.currentTimeMillis();
+                // 删除文件
                 boolean result = this.file.delete();
                 log.info("delete file[REF:" + this.getRefCount() + "] " + this.fileName
                     + (result ? " OK, " : " Failed, ") + "W:" + this.getWrotePosition() + " M:"

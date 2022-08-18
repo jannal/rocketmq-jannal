@@ -351,24 +351,31 @@ public class ConsumeQueue {
     }
 
     public int deleteExpiredFile(long offset) {
+        // 根据CommitLog最小的有效的offset查找小于该offset的ConsumeQueue MappedFile文件删除
         int cnt = this.mappedFileQueue.deleteExpiredFileByOffset(offset, CQ_STORE_UNIT_SIZE);
+        // 根据CommitLog最小的有效的offset修正最小的ConsumeQueue索引offset minLogicOffset
         this.correctMinOffset(offset);
         return cnt;
     }
 
     public void correctMinOffset(long phyMinOffset) {
+        // 获取ConsumeQueue中第一个MappedFile
         MappedFile mappedFile = this.mappedFileQueue.getFirstMappedFile();
         long minExtAddr = 1;
         if (mappedFile != null) {
+            // 获取第一个MappedFile的所有字节内容信息（共享内存，但是指针不一样）
             SelectMappedBufferResult result = mappedFile.selectMappedBuffer(0);
             if (result != null) {
                 try {
+                    // 遍历每个单元信息
                     for (int i = 0; i < result.getSize(); i += ConsumeQueue.CQ_STORE_UNIT_SIZE) {
+                        // 分别读取commitLogOffset(8B)+size(4B)+tagHashCode(8B) = 20B
                         long offsetPy = result.getByteBuffer().getLong();
                         result.getByteBuffer().getInt();
                         long tagsCode = result.getByteBuffer().getLong();
-
+                        // phyMinOffset是CommitLog最小的有效的offset，offsetPy >= phyMinOffset表示当前的ConsumeQueue单元信息存储的是有效的索引信息
                         if (offsetPy >= phyMinOffset) {
+                            // 设置最小的ConsumeQueue索引offset。 文件名称的偏移量值+现有的所有数据的值
                             this.minLogicOffset = result.getMappedFile().getFileFromOffset() + i;
                             log.info("Compute logical min offset: {}, topic: {}, queueId: {}",
                                 this.getMinOffsetInQueue(), this.topic, this.queueId);
@@ -382,6 +389,7 @@ public class ConsumeQueue {
                 } catch (Exception e) {
                     log.error("Exception thrown when correctMinOffset", e);
                 } finally {
+                    // 释放当前result中的mappedFile的引用
                     result.release();
                 }
             }

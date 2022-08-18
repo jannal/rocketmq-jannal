@@ -47,13 +47,19 @@ public class IndexService {
     private final int indexNum;
     //存储路径
     private final String storePath;
+    //IndexFile的集合
     private final ArrayList<IndexFile> indexFileList = new ArrayList<IndexFile>();
+    //读写锁
     private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
 
     public IndexService(final DefaultMessageStore store) {
+        // 从配置中获取相关的配置
         this.defaultMessageStore = store;
+        // 获取默认构建的索引个数  默认是的 500w个
         this.hashSlotNum = store.getMessageStoreConfig().getMaxHashSlotNum();
+        // 设置索引的个数 默认是 5000000 * 4 也就是2000w个
         this.indexNum = store.getMessageStoreConfig().getMaxIndexNum();
+        // 存储的路径
         this.storePath =
             StorePathConfigHelper.getStorePathIndex(store.getMessageStoreConfig().getStorePathRootDir());
     }
@@ -100,8 +106,9 @@ public class IndexService {
             if (this.indexFileList.isEmpty()) {
                 return;
             }
-
+            //查找第一个IndexFile的最后一个索引存储的CommitLog偏移量
             long endPhyOffset = this.indexFileList.get(0).getEndPhyOffset();
+            // 如果偏移量小于现有CommitLog文件的最小偏移量，说明有可以被删除的IndexFile
             if (endPhyOffset < offset) {
                 files = this.indexFileList.toArray();
             }
@@ -113,15 +120,17 @@ public class IndexService {
 
         if (files != null) {
             List<IndexFile> fileList = new ArrayList<IndexFile>();
+            // 只遍历到倒数第二个文件
             for (int i = 0; i < (files.length - 1); i++) {
                 IndexFile f = (IndexFile) files[i];
+                // 判断最后一个索引存储的CommitLog偏移量是否小于现有CommitLog文件的最小偏移量
                 if (f.getEndPhyOffset() < offset) {
                     fileList.add(f);
                 } else {
                     break;
                 }
             }
-
+            // 摧毁、删除、移除队列
             this.deleteExpiredFile(fileList);
         }
     }
@@ -165,20 +174,27 @@ public class IndexService {
 
         long indexLastUpdateTimestamp = 0;
         long indexLastUpdatePhyoffset = 0;
+        //比较获取的最大数量和配置的maxMsgsNumBatch参数。 取最大值
         maxNum = Math.min(maxNum, this.defaultMessageStore.getMessageStoreConfig().getMaxMsgsNumBatch());
         try {
             this.readWriteLock.readLock().lock();
+            //indexFile 不为空 则迭代indexFile 集合
             if (!this.indexFileList.isEmpty()) {
                 for (int i = this.indexFileList.size(); i > 0; i--) {
+                    // 获取IndexFile
                     IndexFile f = this.indexFileList.get(i - 1);
                     boolean lastFile = i == this.indexFileList.size();
+                    //如果是最后一个IndexFile，则记录对应的 最后记录时间 和 最大偏移量
                     if (lastFile) {
                         indexLastUpdateTimestamp = f.getEndTimestamp();
                         indexLastUpdatePhyoffset = f.getEndPhyOffset();
                     }
-
+                    /**
+                     * 检查时间是不是符合 ，
+                     * 1. 开始时间和结束 时间在 IndexFile 头文件记录的beginTimestamp 和endTimestamp 中
+                     */
                     if (f.isTimeMatched(begin, end)) {
-
+                        //获取符合条件的key的物理偏移量
                         f.selectPhyOffset(phyOffsets, buildKey(topic, key), maxNum, begin, end, lastFile);
                     }
 
@@ -205,16 +221,18 @@ public class IndexService {
     }
 
     public void buildIndex(DispatchRequest req) {
+        //尝试获取和创建 IndexFile 最大尝试次数为3 次
         IndexFile indexFile = retryGetAndCreateIndexFile();
         if (indexFile != null) {
             long endPhyOffset = indexFile.getEndPhyOffset();
             DispatchRequest msg = req;
             String topic = msg.getTopic();
             String keys = msg.getKeys();
+            //如果消息的CommitLog的物理偏移量 < IndexFile记录的最后一个消息物理结束偏移量，则表示消息已经记录了
             if (msg.getCommitLogOffset() < endPhyOffset) {
                 return;
             }
-
+            // 如果是事务消息的回滚类型的消息，则直接返回，不进行记录
             final int tranType = MessageSysFlag.getTransactionValue(msg.getSysFlag());
             switch (tranType) {
                 case MessageSysFlag.TRANSACTION_NOT_TYPE:
@@ -226,6 +244,7 @@ public class IndexService {
             }
 
             if (req.getUniqKey() != null) {
+                //保存对应的key的，格式为 topic + "#" + key
                 indexFile = putKey(indexFile, msg, buildKey(topic, req.getUniqKey()));
                 if (indexFile == null) {
                     log.error("putKey error commitlog {} uniqkey {}", req.getCommitLogOffset(), req.getUniqKey());

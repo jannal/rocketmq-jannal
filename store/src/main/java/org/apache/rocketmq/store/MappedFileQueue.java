@@ -119,11 +119,14 @@ public class MappedFileQueue {
             //获取到每个MappedFile末尾的偏移量
             long fileTailOffset = file.getFileFromOffset() + this.mappedFileSize;
             if (fileTailOffset > offset) {
+                // 尾部偏移量大于已经校验的offset，比较文件的开始偏移量
+                // 如果已经校验的offset大于文件的起始偏移量，说明当前文件包含了有效偏移量。此时需要重置文件的指针
                 if (offset >= file.getFileFromOffset()) {
                     file.setWrotePosition((int) (offset % this.mappedFileSize));
                     file.setCommittedPosition((int) (offset % this.mappedFileSize));
                     file.setFlushedPosition((int) (offset % this.mappedFileSize));
                 } else {
+                    // 可以直接删除的后续文件
                     file.destroy(1000);
                     willRemoveFiles.add(file);
                 }
@@ -387,11 +390,12 @@ public class MappedFileQueue {
         final int deleteFilesInterval,
         final long intervalForcibly,
         final boolean cleanImmediately) {
+        // 为了不影响正常的写入，克隆一份
         Object[] mfs = this.copyMappedFiles(0);
 
         if (null == mfs)
             return 0;
-
+        // length-1是不删除最后一个文件，最后一个一般都在使用
         int mfsLength = mfs.length - 1;
         int deleteCount = 0;
         List<MappedFile> files = new ArrayList<MappedFile>();
@@ -399,16 +403,19 @@ public class MappedFileQueue {
         if (null != mfs) {
             for (int i = 0; i < mfsLength; i++) {
                 MappedFile mappedFile = (MappedFile) mfs[i];
+                // 最后修改时间+过期时间
                 long liveMaxTimestamp = mappedFile.getLastModifiedTimestamp() + expiredTime;
+                // 已经过期，或者立即清除
                 if (System.currentTimeMillis() >= liveMaxTimestamp || cleanImmediately) {
+                    // 进行销毁（有可能destroy返回false）
                     if (mappedFile.destroy(intervalForcibly)) {
                         files.add(mappedFile);
                         deleteCount++;
-
+                        // 一次最多删除10个
                         if (files.size() >= DELETE_FILES_BATCH_MAX) {
                             break;
                         }
-
+                        // 每个文件的删除间隔
                         if (deleteFilesInterval > 0 && (i + 1) < mfsLength) {
                             try {
                                 Thread.sleep(deleteFilesInterval);
@@ -424,28 +431,34 @@ public class MappedFileQueue {
                 }
             }
         }
-
+        // 删除MappedFileQueue队列中的MappedFile
         deleteExpiredFile(files);
 
         return deleteCount;
     }
 
     public int deleteExpiredFileByOffset(long offset, int unitSize) {
+        // 为了不影响正常的写入，克隆一份
         Object[] mfs = this.copyMappedFiles(0);
 
         List<MappedFile> files = new ArrayList<MappedFile>();
         int deleteCount = 0;
         if (null != mfs) {
-
+            // 不删除最后一个。所以遍历到倒数第二个即可
             int mfsLength = mfs.length - 1;
 
             for (int i = 0; i < mfsLength; i++) {
                 boolean destroy;
                 MappedFile mappedFile = (MappedFile) mfs[i];
+                // 获取mappedFile中最后ConsumeQueue的信息 mappedFileSize - unitSize(20)
+                // ConsumeQueue存储格式为commitLogOffset(8B)+size(4B)+tagHashCode(8B)
                 SelectMappedBufferResult result = mappedFile.selectMappedBuffer(this.mappedFileSize - unitSize);
                 if (result != null) {
+                    // 表示最后一个ConsumeQueue信息记录的消息在CommitLog的物理位置
                     long maxOffsetInLogicQueue = result.getByteBuffer().getLong();
+                    // 使mappedFile引用数减一
                     result.release();
+                    // 最大偏移量小于CommitLog的最小偏移量，则销毁
                     destroy = maxOffsetInLogicQueue < offset;
                     if (destroy) {
                         log.info("physic min offset " + offset + ", logics in current mappedFile max offset "

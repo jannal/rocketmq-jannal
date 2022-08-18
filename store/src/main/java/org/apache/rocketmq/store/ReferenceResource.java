@@ -53,8 +53,10 @@ public abstract class ReferenceResource {
 
     public void shutdown(final long intervalForcibly) {
         if (this.available) {
+            // 标记不可用
             this.available = false;
             this.firstShutdownTimestamp = System.currentTimeMillis();
+            // 如果引用大于0，则不不会释放
             this.release();
         } else if (this.getRefCount() > 0) {
             if ((System.currentTimeMillis() - this.firstShutdownTimestamp) >= intervalForcibly) {
@@ -70,7 +72,7 @@ public abstract class ReferenceResource {
             return;
 
         synchronized (this) {
-            //如果引用计数等于0，则执行清理堆外内存
+            //如果引用计数小于或者等于0，则执行清理堆外内存
             this.cleanupOver = this.cleanup(value);
         }
     }

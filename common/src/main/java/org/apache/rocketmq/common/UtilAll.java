@@ -192,13 +192,13 @@ public class UtilAll {
 
             if (!file.exists())
                 return -1;
-
+            // 此文件所在分区的大小
             long totalSpace = file.getTotalSpace();
 
             if (totalSpace > 0) {
                 long freeSpace = file.getFreeSpace();
                 long usedSpace = totalSpace - freeSpace;
-
+                // 使用空间/总共空间
                 return usedSpace / (double) totalSpace;
             }
         } catch (Exception e) {

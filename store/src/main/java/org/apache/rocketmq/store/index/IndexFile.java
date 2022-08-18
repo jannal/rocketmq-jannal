@@ -59,15 +59,15 @@ public class IndexFile {
         this.mappedByteBuffer = this.mappedFile.getMappedByteBuffer();
         this.hashSlotNum = hashSlotNum;
         this.indexNum = indexNum;
-
+        // 共享同一个byteBuffer，但是索引位置独立
         ByteBuffer byteBuffer = this.mappedByteBuffer.slice();
         this.indexHeader = new IndexHeader(byteBuffer);
-
+        //初始化头文件的beginPhyOffset 和 endPhyOffset
         if (endPhyOffset > 0) {
             this.indexHeader.setBeginPhyOffset(endPhyOffset);
             this.indexHeader.setEndPhyOffset(endPhyOffset);
         }
-
+        //初始化头文件的beginTimestamp 和 endTimestamp
         if (endTimestamp > 0) {
             this.indexHeader.setBeginTimestamp(endTimestamp);
             this.indexHeader.setEndTimestamp(endTimestamp);
@@ -101,6 +101,7 @@ public class IndexFile {
     }
 
     public boolean putKey(final String key, final long phyOffset, final long storeTimestamp) {
+        //如果已经构建的索引index数量 < 最大的index数量，则进行插入，否则直接返回 false
         if (this.indexHeader.getIndexCount() < this.indexNum) {
             //计算消息key的hash
             int keyHash = indexKeyHashMethod(key);
@@ -135,7 +136,7 @@ public class IndexFile {
                 } else if (timeDiff < 0) {
                     timeDiff = 0;
                 }
-
+                // IndexFile最新的物理偏移量，追加索引数据
                 int absIndexPos =
                     IndexHeader.INDEX_HEADER_SIZE + this.hashSlotNum * hashSlotSize
                         + this.indexHeader.getIndexCount() * indexSize;
@@ -247,7 +248,7 @@ public class IndexFile {
                         int keyHashRead = this.mappedByteBuffer.getInt(absIndexPos);
                         //物理偏移量
                         long phyOffsetRead = this.mappedByteBuffer.getLong(absIndexPos + 4);
-
+                        // 存储时间 - 头文件记录的开始时间得到 时间差
                         long timeDiff = (long) this.mappedByteBuffer.getInt(absIndexPos + 4 + 8);
                         //获取上一个soltValue的值
                         int prevIndexRead = this.mappedByteBuffer.getInt(absIndexPos + 4 + 8 + 4);

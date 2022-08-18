@@ -179,6 +179,7 @@ public class CommitLog {
      * When the normal exit, data recovery, all memory data have been flush
      */
     public void recoverNormally() {
+        // 默认开启CRC验证
         boolean checkCRCOnRecover = this.defaultMessageStore.getMessageStoreConfig().isCheckCRCOnRecover();
         final List<MappedFile> mappedFiles = this.mappedFileQueue.getMappedFiles();
         if (!mappedFiles.isEmpty()) {
@@ -191,7 +192,9 @@ public class CommitLog {
 
             MappedFile mappedFile = mappedFiles.get(index);
             ByteBuffer byteBuffer = mappedFile.sliceByteBuffer();
+            //processOffset为CommitLog文件已确认的物理偏移量
             long processOffset = mappedFile.getFileFromOffset();
+            //当前文件已校验通过的物理偏移量
             long mappedFileOffset = 0;
             // 遍历CommitLog文件
             while (true) {
@@ -200,11 +203,13 @@ public class CommitLog {
                 int size = dispatchRequest.getMsgSize();
                 // Normal data
                 if (dispatchRequest.isSuccess() && size > 0) {
+                    // 没有到文件末尾，mappedFileOffset指针向前移动本条消息的长度
                     mappedFileOffset += size;
                 }
                 // Come the end of the file, switch to the next file Since the
                 // return 0 representatives met last hole,
                 // this can not be included in truncate offset
+                // 文件末尾
                 else if (dispatchRequest.isSuccess() && size == 0) {
                     index++;
                     if (index >= mappedFiles.size()) {
@@ -212,6 +217,7 @@ public class CommitLog {
                         log.info("recover last 3 physics file over, last mapped file " + mappedFile.getFileName());
                         break;
                     } else {
+                        // 下一个文件，重置mappedFileOffset和processOffset，继续下一次循环
                         mappedFile = mappedFiles.get(index);
                         byteBuffer = mappedFile.sliceByteBuffer();
                         //processOffset为CommitLog文件已确认的物理偏移量
@@ -418,6 +424,7 @@ public class CommitLog {
 
     public void recoverAbnormally() {
         // recover by the minimum time stamp
+        // 默认为ttue，即校验消息CRC
         boolean checkCRCOnRecover = this.defaultMessageStore.getMessageStoreConfig().isCheckCRCOnRecover();
         final List<MappedFile> mappedFiles = this.mappedFileQueue.getMappedFiles();
         if (!mappedFiles.isEmpty()) {
@@ -427,6 +434,7 @@ public class CommitLog {
             MappedFile mappedFile = null;
             for (; index >= 0; index--) {
                 mappedFile = mappedFiles.get(index);
+                // 找到第一个消息存储正常的文件
                 if (this.isMappedFileMatchedRecover(mappedFile)) {
                     log.info("recover from this mapped file " + mappedFile.getFileName());
                     break;
@@ -440,9 +448,13 @@ public class CommitLog {
             }
 
             ByteBuffer byteBuffer = mappedFile.sliceByteBuffer();
+            //processOffset为CommitLog文件已确认的物理偏移量
             long processOffset = mappedFile.getFileFromOffset();
+            //当前文件已校验通过的物理偏移量
             long mappedFileOffset = 0;
+            // 遍历CommitLog文件
             while (true) {
+                // 查找消息，根据配置是否验证CRC
                 DispatchRequest dispatchRequest = this.checkMessageAndReturnSize(byteBuffer, checkCRCOnRecover);
                 int size = dispatchRequest.getMsgSize();
 
@@ -477,12 +489,13 @@ public class CommitLog {
                         mappedFile = mappedFiles.get(index);
                         byteBuffer = mappedFile.sliceByteBuffer();
                         processOffset = mappedFile.getFileFromOffset();
+                        //当前已经校验通过的偏移量
                         mappedFileOffset = 0;
                         log.info("recover next physics file, " + mappedFile.getFileName());
                     }
                 }
             }
-
+            // 更新MappedFileQueue的flushedWhere和committedWhere指针
             processOffset += mappedFileOffset;
             this.mappedFileQueue.setFlushedWhere(processOffset);
             this.mappedFileQueue.setCommittedWhere(processOffset);
@@ -514,7 +527,7 @@ public class CommitLog {
         if (0 == storeTimestamp) {
             return false;
         }
-
+        // 默认true
         if (this.defaultMessageStore.getMessageStoreConfig().isMessageIndexEnable()
             && this.defaultMessageStore.getMessageStoreConfig().isMessageIndexSafe()) {
             // 文件的第一条消息时间戳小于检查点文件的，说明该文件部分消息是可靠的，从该文件开始恢复
