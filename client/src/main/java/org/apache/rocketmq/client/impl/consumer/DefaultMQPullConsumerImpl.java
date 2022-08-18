@@ -534,6 +534,7 @@ public class DefaultMQPullConsumerImpl implements MQConsumerInner {
     public synchronized void start() throws MQClientException {
         switch (this.serviceState) {
             case CREATE_JUST:
+                // 设置初始状态
                 this.serviceState = ServiceState.START_FAILED;
 
                 this.checkConfig();

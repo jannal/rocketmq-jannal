@@ -18,6 +18,14 @@ package org.apache.rocketmq.store;
 
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * ByteBuffer通常使用slice方法，即两个ByteBuffer对象内存地址相同，但是维护不同的指针
+ * 这样做的好处：避免内存复制
+ * 这样做的坏处：ByteBufer释放变得复杂。需要跟踪ByteBuffer调用slice的次数，如果创建的对象生命周期没有结束，则不能随便释放
+ * 否则导致内存访问错误。
+ * RocketMQ 通过每次slice后引用计数加一，释放后引用计数减一，只有当前的引用计数为0，才可以真正释放
+ *
+ */
 public abstract class ReferenceResource {
     protected final AtomicLong refCount = new AtomicLong(1);
     //是否可用

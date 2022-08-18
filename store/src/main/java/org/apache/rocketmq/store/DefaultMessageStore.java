@@ -169,6 +169,7 @@ public class DefaultMessageStore implements MessageStore {
         boolean result = true;
 
         try {
+            //判断abort文件是否存在，此文件在启动时创建，正常停止时会被删除
             boolean lastExitOK = !this.isTempFileExist();
             log.info("last shutdown {}", lastExitOK ? "normally" : "abnormally");
 
@@ -1774,6 +1775,7 @@ public class DefaultMessageStore implements MessageStore {
                                     //分发到CommitLogDispatcher执行
                                     DefaultMessageStore.this.doDispatch(dispatchRequest);
 
+                                    //consumer长轮询，通过此线程发送信息给consumer
                                     if (BrokerRole.SLAVE != DefaultMessageStore.this.getMessageStoreConfig().getBrokerRole()
                                         && DefaultMessageStore.this.brokerConfig.isLongPollingEnable()) {
                                         DefaultMessageStore.this.messageArrivingListener.arriving(dispatchRequest.getTopic(),

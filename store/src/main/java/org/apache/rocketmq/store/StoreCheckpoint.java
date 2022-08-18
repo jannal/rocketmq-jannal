@@ -36,7 +36,7 @@ public class StoreCheckpoint {
     private volatile long physicMsgTimestamp = 0;
     //ConsumeQueue最新一条记录的存储时间
     private volatile long logicsMsgTimestamp = 0;
-    //最近一个已经写完的index的最后一条记录时间
+    //Index File最新一条记录的存储时间
     private volatile long indexMsgTimestamp = 0;
 
     public StoreCheckpoint(final String scpPath) throws IOException {

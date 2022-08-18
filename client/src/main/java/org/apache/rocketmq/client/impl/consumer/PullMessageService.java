@@ -95,6 +95,7 @@ public class PullMessageService extends ServiceThread {
         while (!this.isStopped()) {
             try {
                 //从队列中获取一个PullRequest，如果队列为空，则阻塞，直到队列中被放入PullRequest
+                //consumer消费没有定时任务，定时任务在服务端，consumer通过不断向队列中添加pullRequest达到不断拉取消息的目的
                 PullRequest pullRequest = this.pullRequestQueue.take();
                 //将PullRequest添加到DefaultMQPushConsumerImpl
                 this.pullMessage(pullRequest);

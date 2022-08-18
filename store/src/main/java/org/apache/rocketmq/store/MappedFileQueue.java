@@ -181,7 +181,7 @@ public class MappedFileQueue {
                 try {
                     // 加载文件到MappedFile，并按顺序添加到CopyOnWriteArrayList
                     MappedFile mappedFile = new MappedFile(file.getPath(), mappedFileSize);
-
+                    // 将wrotePosition、flushedPosition、committedPosition三个指针都设置为文件大小
                     mappedFile.setWrotePosition(this.mappedFileSize);
                     mappedFile.setFlushedPosition(this.mappedFileSize);
                     mappedFile.setCommittedPosition(this.mappedFileSize);

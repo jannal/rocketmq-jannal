@@ -183,15 +183,19 @@ public class CommitLog {
         final List<MappedFile> mappedFiles = this.mappedFileQueue.getMappedFiles();
         if (!mappedFiles.isEmpty()) {
             // Began to recover from the last third file
+            // 从倒数第三个文件开始恢复
             int index = mappedFiles.size() - 3;
             if (index < 0)
+                // 不足三个文件，则从第一个文件开始恢复
                 index = 0;
 
             MappedFile mappedFile = mappedFiles.get(index);
             ByteBuffer byteBuffer = mappedFile.sliceByteBuffer();
             long processOffset = mappedFile.getFileFromOffset();
             long mappedFileOffset = 0;
+            // 遍历CommitLog文件
             while (true) {
+                // 查找消息，根据配置是否验证CRC
                 DispatchRequest dispatchRequest = this.checkMessageAndReturnSize(byteBuffer, checkCRCOnRecover);
                 int size = dispatchRequest.getMsgSize();
                 // Normal data
@@ -210,7 +214,9 @@ public class CommitLog {
                     } else {
                         mappedFile = mappedFiles.get(index);
                         byteBuffer = mappedFile.sliceByteBuffer();
+                        //processOffset为CommitLog文件已确认的物理偏移量
                         processOffset = mappedFile.getFileFromOffset();
+                        //当前已经校验通过的偏移量
                         mappedFileOffset = 0;
                         log.info("recover next physics file, " + mappedFile.getFileName());
                     }
@@ -221,7 +227,7 @@ public class CommitLog {
                     break;
                 }
             }
-
+            // 更新MappedFileQueue的flushedWhere和committedWhere指针
             processOffset += mappedFileOffset;
             this.mappedFileQueue.setFlushedWhere(processOffset);
             this.mappedFileQueue.setCommittedWhere(processOffset);
@@ -416,6 +422,7 @@ public class CommitLog {
         final List<MappedFile> mappedFiles = this.mappedFileQueue.getMappedFiles();
         if (!mappedFiles.isEmpty()) {
             // Looking beginning to recover from which file
+            // 从最后一个文件开始向前遍历
             int index = mappedFiles.size() - 1;
             MappedFile mappedFile = null;
             for (; index >= 0; index--) {
@@ -427,6 +434,7 @@ public class CommitLog {
             }
 
             if (index < 0) {
+                // 第一个文件
                 index = 0;
                 mappedFile = mappedFiles.get(index);
             }
@@ -485,8 +493,10 @@ public class CommitLog {
         }
         // Commitlog case files are deleted
         else {
+            // 未找到有效的MappedFile，更新flushwhere和CommittedWhere为0
             this.mappedFileQueue.setFlushedWhere(0);
             this.mappedFileQueue.setCommittedWhere(0);
+            // 删除ConsumeQueue文件
             this.defaultMessageStore.destroyLogics();
         }
     }
@@ -495,10 +505,11 @@ public class CommitLog {
         ByteBuffer byteBuffer = mappedFile.sliceByteBuffer();
 
         int magicCode = byteBuffer.getInt(MessageDecoder.MESSAGE_MAGIC_CODE_POSTION);
+        // 判断文件的魔数
         if (magicCode != MESSAGE_MAGIC_CODE) {
             return false;
         }
-
+        // 没有存储任何消息
         long storeTimestamp = byteBuffer.getLong(MessageDecoder.MESSAGE_STORE_TIMESTAMP_POSTION);
         if (0 == storeTimestamp) {
             return false;
@@ -506,6 +517,7 @@ public class CommitLog {
 
         if (this.defaultMessageStore.getMessageStoreConfig().isMessageIndexEnable()
             && this.defaultMessageStore.getMessageStoreConfig().isMessageIndexSafe()) {
+            // 文件的第一条消息时间戳小于检查点文件的，说明该文件部分消息是可靠的，从该文件开始恢复
             if (storeTimestamp <= this.defaultMessageStore.getStoreCheckpoint().getMinTimestampIndex()) {
                 log.info("find check timestamp, {} {}",
                     storeTimestamp,

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Diagram>
+  <ID>JAVA</ID>
+  <OriginalElement>org.apache.rocketmq.client.consumer.AllocateMessageQueueStrategy</OriginalElement>
+  <nodes>
+    <node x="387.0000000000001" y="78.0">org.apache.rocketmq.client.consumer.rebalance.AllocateMessageQueueAveragelyByCircle</node>
+    <node x="1422.0" y="78.0">org.apache.rocketmq.client.consumer.rebalance.AllocateMessageQueueByConfig</node>
+    <node x="1750.0" y="78.0">org.apache.rocketmq.client.consumer.rebalance.AllocateMessageQueueConsistentHash</node>
+    <node x="0.0" y="78.0">org.apache.rocketmq.client.consumer.rebalance.AllocateMessageQueueByMachineRoom</node>
+    <node x="1088.0" y="78.0">org.apache.rocketmq.client.consumer.rebalance.AllocateMessageQueueAveragely</node>
+    <node x="934.2500000000001" y="0.0">org.apache.rocketmq.client.consumer.AllocateMessageQueueStrategy</node>
+    <node x="785.0000000000001" y="78.0">org.apache.rocketmq.client.consumer.rebalance.AllocateMachineRoomNearby</node>
+  </nodes>
+  <notes />
+  <edges>
+    <edge source="org.apache.rocketmq.client.consumer.rebalance.AllocateMessageQueueByConfig" target="org.apache.rocketmq.client.consumer.AllocateMessageQueueStrategy" relationship="REALIZATION">
+      <point x="0.0" y="-14.0" />
+      <point x="1576.0" y="53.0" />
+      <point x="1085.75" y="53.0" />
+      <point x="0.0" y="14.0" />
+    </edge>
+    <edge source="org.apache.rocketmq.client.consumer.rebalance.AllocateMessageQueueAveragelyByCircle" target="org.apache.rocketmq.client.consumer.AllocateMessageQueueStrategy" relationship="REALIZATION">
+      <point x="0.0" y="-14.0" />
+      <point x="576.0000000000001" y="53.0" />
+      <point x="1085.75" y="53.0" />
+      <point x="0.0" y="14.0" />
+    </edge>
+    <edge source="org.apache.rocketmq.client.consumer.rebalance.AllocateMessageQueueAveragely" target="org.apache.rocketmq.client.consumer.AllocateMessageQueueStrategy" relationship="REALIZATION">
+      <point x="0.0" y="-14.0" />
+      <point x="1245.0" y="53.0" />
+      <point x="1085.75" y="53.0" />
+      <point x="0.0" y="14.0" />
+    </edge>
+    <edge source="org.apache.rocketmq.client.consumer.rebalance.AllocateMachineRoomNearby" target="org.apache.rocketmq.client.consumer.AllocateMessageQueueStrategy" relationship="REALIZATION">
+      <point x="0.0" y="-14.0" />
+      <point x="926.5000000000001" y="53.0" />
+      <point x="1085.75" y="53.0" />
+      <point x="0.0" y="14.0" />
+    </edge>
+    <edge source="org.apache.rocketmq.client.consumer.rebalance.AllocateMessageQueueByMachineRoom" target="org.apache.rocketmq.client.consumer.AllocateMessageQueueStrategy" relationship="REALIZATION">
+      <point x="0.0" y="-14.0" />
+      <point x="183.5" y="53.0" />
+      <point x="1085.75" y="53.0" />
+      <point x="0.0" y="14.0" />
+    </edge>
+    <edge source="org.apache.rocketmq.client.consumer.rebalance.AllocateMessageQueueConsistentHash" target="org.apache.rocketmq.client.consumer.AllocateMessageQueueStrategy" relationship="REALIZATION">
+      <point x="0.0" y="-14.0" />
+      <point x="1930.0" y="53.0" />
+      <point x="1085.75" y="53.0" />
+      <point x="0.0" y="14.0" />
+    </edge>
+  </edges>
+  <settings layout="Hierarchic" zoom="0.6065727699530516" showDependencies="false" x="1055.0" y="53.0" />
+  <SelectedNodes />
+  <Categories />
+  <SCOPE>All</SCOPE>
+  <VISIBILITY>private</VISIBILITY>
+</Diagram>
+
