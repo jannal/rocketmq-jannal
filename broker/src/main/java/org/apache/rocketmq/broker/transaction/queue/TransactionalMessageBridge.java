@@ -109,6 +109,7 @@ public class TransactionalMessageBridge {
     }
 
     public PullResult getOpMessage(int queueId, long offset, int nums) {
+        // 消费组名称CID_RMQ_SYS_TRANS，主题名称RMQ_SYS_TRANS_OP_HALF_TOPIC
         String group = TransactionalMessageUtil.buildConsumerGroup();
         String topic = TransactionalMessageUtil.buildOpTopic();
         SubscriptionData sub = new SubscriptionData(topic, "*");
@@ -187,22 +188,29 @@ public class TransactionalMessageBridge {
     }
 
     public PutMessageResult putHalfMessage(MessageExtBrokerInner messageInner) {
+        // 将消息存储到CommitLog或者其他的存储中
         return store.putMessage(parseHalfMessageInner(messageInner));
     }
 
     private MessageExtBrokerInner parseHalfMessageInner(MessageExtBrokerInner msgInner) {
+        // 把消息的原始topic及队列信息存储到属性中，因为要写到事务prepare的主题RMQ_SYS_TRANS_HALF_TOPIC的队列里
         MessageAccessor.putProperty(msgInner, MessageConst.PROPERTY_REAL_TOPIC, msgInner.getTopic());
         MessageAccessor.putProperty(msgInner, MessageConst.PROPERTY_REAL_QUEUE_ID,
             String.valueOf(msgInner.getQueueId()));
+        // 去掉事务标记，设置为0
         msgInner.setSysFlag(
             MessageSysFlag.resetTransactionValue(msgInner.getSysFlag(), MessageSysFlag.TRANSACTION_NOT_TYPE));
+        // prepare消息的主题RMQ_SYS_TRANS_HALF_TOPIC
         msgInner.setTopic(TransactionalMessageUtil.buildHalfTopic());
+        // RMQ_SYS_TRANS_HALF_TOPIC只有一个队列
         msgInner.setQueueId(0);
         msgInner.setPropertiesString(MessageDecoder.messageProperties2String(msgInner.getProperties()));
         return msgInner;
     }
 
     public boolean putOpMessage(MessageExt messageExt, String opType) {
+        // messageExt是Prepare消息
+        // 构建一个消息队列
         MessageQueue messageQueue = new MessageQueue(messageExt.getTopic(),
             this.brokerController.getBrokerConfig().getBrokerName(), messageExt.getQueueId());
         if (TransactionalMessageUtil.REMOVETAG.equals(opType)) {
@@ -305,19 +313,25 @@ public class TransactionalMessageBridge {
     }
 
     private void writeOp(Message message, MessageQueue mq) {
+        //此处mq指的是Prepare消息队列（RMQ_SYS_TRANS_HALF_TOPIC主题的）
+        //key=RMQ_SYS_TRANS_HALF_TOPIC队列与value=RMQ_SYS_TRANS_OP_HALF_TOPIC缓存
         MessageQueue opQueue;
         if (opQueueMap.containsKey(mq)) {
             opQueue = opQueueMap.get(mq);
         } else {
+            // 创建一个RMQ_SYS_TRANS_OP_HALF_TOPIC主题的消息队列
             opQueue = getOpQueueByHalf(mq);
+            // 如果已经存在不会覆盖已有的值，直接返回已有的值
             MessageQueue oldQueue = opQueueMap.putIfAbsent(mq, opQueue);
             if (oldQueue != null) {
                 opQueue = oldQueue;
             }
         }
+        //TODO by jannal 此处为什么会为null ??
         if (opQueue == null) {
             opQueue = new MessageQueue(TransactionalMessageUtil.buildOpTopic(), mq.getBrokerName(), mq.getQueueId());
         }
+        // 构建Message
         putMessage(makeOpMessageInner(message, opQueue));
     }
 

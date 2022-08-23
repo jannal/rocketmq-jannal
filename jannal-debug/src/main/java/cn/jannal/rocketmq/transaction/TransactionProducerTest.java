@@ -14,6 +14,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 
 /**
  * @author jannal
@@ -24,7 +25,7 @@ public class TransactionProducerTest {
 
     @Test
     public void testTransaction() {
-        String namesrvAddr = "rocketmq-nameserver1:9876;rocketmq-nameserver2:9877";
+        String namesrvAddr = "rocketmq-nameserver1:9876";
         String producerGroup = "ProducerTransactionGroupName";
 
 
@@ -46,17 +47,17 @@ public class TransactionProducerTest {
             producer.start();
 
             String[] tags = new String[]{"TagA", "TagB", "TagC", "TagD", "TagE"};
-            for (int i = 0; i < 10; i++) {
-                String msgStr = ("Hello world " + i);
-                Message msg =
-                        new Message("transactionTopic",
-                                tags[i % tags.length],
-                                "KEY" + i,
-                                msgStr.getBytes(RemotingHelper.DEFAULT_CHARSET));
-                SendResult sendResult = producer.sendMessageInTransaction(msg, null);
-                logger.info("{}", sendResult);
+            int i = 1;
+            String msgStr = (i + "");
+            Message msg =
+                    new Message("transactionTopic",
+                            tags[i % tags.length],
+                            "KEY" + i,
+                            msgStr.getBytes(RemotingHelper.DEFAULT_CHARSET));
+            SendResult sendResult = producer.sendMessageInTransaction(msg, null);
+            logger.info("{}", sendResult);
+            LockSupport.park();
 
-            }
         } catch (Exception e) {
             logger.error(e.getMessage(), e);
         } finally {

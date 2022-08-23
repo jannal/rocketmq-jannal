@@ -56,12 +56,13 @@ public class EndTransactionProcessor implements NettyRequestProcessor {
         final EndTransactionRequestHeader requestHeader =
             (EndTransactionRequestHeader)request.decodeCommandCustomHeader(EndTransactionRequestHeader.class);
         LOGGER.info("Transaction request:{}", requestHeader);
+        // 从节点不允许处理事务消息
         if (BrokerRole.SLAVE == brokerController.getMessageStoreConfig().getBrokerRole()) {
             response.setCode(ResponseCode.SLAVE_NOT_AVAILABLE);
             LOGGER.warn("Message store is slave mode, so end transaction is forbidden. ");
             return response;
         }
-
+        // 事务回查标记，是否为事务回查（仅仅打印日志），只有提交或者回滚的消息才向后处理
         if (requestHeader.getFromTransactionCheck()) {
             switch (requestHeader.getCommitOrRollback()) {
                 case MessageSysFlag.TRANSACTION_NOT_TYPE: {
@@ -123,17 +124,24 @@ public class EndTransactionProcessor implements NettyRequestProcessor {
         }
         OperationResult result = new OperationResult();
         if (MessageSysFlag.TRANSACTION_COMMIT_TYPE == requestHeader.getCommitOrRollback()) {
+            // 根据之前提交的内部事务topic的偏移量查出来提交的这条消息
             result = this.brokerController.getTransactionalMessageService().commitMessage(requestHeader);
             if (result.getResponseCode() == ResponseCode.SUCCESS) {
+                // 校验查询出来的这条消息是否正确
                 RemotingCommand res = checkPrepareMessage(result.getPrepareMessage(), requestHeader);
                 if (res.getCode() == ResponseCode.SUCCESS) {
+                    // 恢复原始消息
                     MessageExtBrokerInner msgInner = endMessageTransaction(result.getPrepareMessage());
                     msgInner.setSysFlag(MessageSysFlag.resetTransactionValue(msgInner.getSysFlag(), requestHeader.getCommitOrRollback()));
                     msgInner.setQueueOffset(requestHeader.getTranStateTableOffset());
                     msgInner.setPreparedTransactionOffset(requestHeader.getCommitLogOffset());
                     msgInner.setStoreTimestamp(result.getPrepareMessage().getStoreTimestamp());
+                    //存储到CommitLog文件中，如果成功，则删除半消息
                     RemotingCommand sendResult = sendFinalMessage(msgInner);
                     if (sendResult.getCode() == ResponseCode.SUCCESS) {
+                        // 删除prepare消息，其实就是向RMQ_SYS_TRANS_OP_HALF_TOPIC主题写入消息，tag是d
+                        // 因为RocketMQ是追加消息，不支持更改和删除，所以删除就是在特有的主题下新增一条消息
+                        // 这样无论是提交还是回滚，都可以找到，以此来判断是回滚还是提交了。如果没有则是未知状态
                         this.brokerController.getTransactionalMessageService().deletePrepareMessage(result.getPrepareMessage());
                     }
                     return sendResult;
@@ -191,9 +199,13 @@ public class EndTransactionProcessor implements NettyRequestProcessor {
     }
 
     private MessageExtBrokerInner endMessageTransaction(MessageExt msgExt) {
+        // 初始化新的消息实体MessageExtBrokerInner
         MessageExtBrokerInner msgInner = new MessageExtBrokerInner();
+        // 从属性中恢复消息的原topic
         msgInner.setTopic(msgExt.getUserProperty(MessageConst.PROPERTY_REAL_TOPIC));
+        // 从属性中恢复消息的原队列id
         msgInner.setQueueId(Integer.parseInt(msgExt.getUserProperty(MessageConst.PROPERTY_REAL_QUEUE_ID)));
+        // 复制消息体，消息属性
         msgInner.setBody(msgExt.getBody());
         msgInner.setFlag(msgExt.getFlag());
         msgInner.setBornTimestamp(msgExt.getBornTimestamp());
@@ -210,6 +222,7 @@ public class EndTransactionProcessor implements NettyRequestProcessor {
         msgInner.setTagsCode(tagsCodeValue);
         MessageAccessor.setProperties(msgInner, msgExt.getProperties());
         msgInner.setPropertiesString(MessageDecoder.messageProperties2String(msgExt.getProperties()));
+        // 清除事务消息属性
         MessageAccessor.clearProperty(msgInner, MessageConst.PROPERTY_REAL_TOPIC);
         MessageAccessor.clearProperty(msgInner, MessageConst.PROPERTY_REAL_QUEUE_ID);
         return msgInner;
