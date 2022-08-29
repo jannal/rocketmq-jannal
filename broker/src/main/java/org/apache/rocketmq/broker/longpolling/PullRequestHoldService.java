@@ -119,6 +119,7 @@ public class PullRequestHoldService extends ServiceThread {
         String key = this.buildKey(topic, queueId);
         ManyPullRequest mpr = this.pullRequestTable.get(key);
         if (mpr != null) {
+            // 克隆List并清空列表
             List<PullRequest> requestList = mpr.cloneListAndClear();
             if (requestList != null) {
                 List<PullRequest> replayList = new ArrayList<PullRequest>();
@@ -129,8 +130,9 @@ public class PullRequestHoldService extends ServiceThread {
                     if (newestOffset <= request.getPullFromThisOffset()) {
                         newestOffset = this.brokerController.getMessageStore().getMaxOffsetInQueue(topic, queueId);
                     }
-
+                    // 如果队列最大偏移量大于 pullFromThisOffset 说明有新的消息到达，
                     if (newestOffset > request.getPullFromThisOffset()) {
+                        // 消息是否服务过滤条件（对消息进行一次简单过滤）
                         boolean match = request.getMessageFilter().isMatchedByConsumeQueue(tagsCode,
                             new ConsumeQueueExt.CqExtUnit(tagsCode, msgStoreTime, filterBitMap));
                         // match by bit map, need eval again when properties is not null.

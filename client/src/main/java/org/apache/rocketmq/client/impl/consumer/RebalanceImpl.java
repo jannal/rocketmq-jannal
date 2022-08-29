@@ -370,7 +370,7 @@ public abstract class RebalanceImpl {
             }
         }
 
-        // 遍历已经分配的队列，如果队列不在processQueueTable负载表中，则创建改队列拉取任务PullRequest，然后添加到PullMessageService线程的队列中
+        // 遍历已经分配的队列，如果队列不在processQueueTable负载表中，则创建该队列拉取任务PullRequest，然后添加到PullMessageService线程的队列中
         List<PullRequest> pullRequestList = new ArrayList<PullRequest>();
         for (MessageQueue mq : mqSet) {
             if (!this.processQueueTable.containsKey(mq)) {

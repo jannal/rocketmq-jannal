@@ -210,6 +210,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
             this.makeSureStateOK();
         } catch (MQClientException e) {
             log.warn("pullMessage exception, consumer state not ok", e);
+            // 延迟3000ms再拉取
             this.executePullRequestLater(pullRequest, PULL_TIME_DELAY_MILLS_WHEN_EXCEPTION);
             return;
         }
@@ -258,12 +259,17 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                 return;
             }
         } else {
+            // 顺序消费，需要先锁定消费队列
             if (processQueue.isLocked()) {
+                // 如果锁定成功，判断是否是第一次，第一次需要请求Broker获取最新提交的偏移量
                 if (!pullRequest.isLockedFirst()) {
+                    // 查询已经提交的偏移量
                     final long offset = this.rebalanceImpl.computePullFromWhere(pullRequest.getMessageQueue());
+                    // 正常第一次应该是offset==nextOffset
                     boolean brokerBusy = offset < pullRequest.getNextOffset();
                     log.info("the first time to pull message, so fix offset from broker. pullRequest: {} NewOffset: {} brokerBusy: {}",
                         pullRequest, offset, brokerBusy);
+                    // 第一次pull，拉取请求的偏移量大于Broker已经提交的消费偏移量，表示broker处于繁忙状态
                     if (brokerBusy) {
                         log.info("[NOTIFYME]the first time to pull message, but pull request offset larger than broker consume offset. pullRequest: {} NewOffset: {}",
                             pullRequest, offset);
@@ -273,6 +279,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                     pullRequest.setNextOffset(offset);
                 }
             } else {
+                // 延迟3000ms，添加拉取请求到队列，等待分配，避免多个Consumer同时消费顺序消息
                 this.executePullRequestLater(pullRequest, PULL_TIME_DELAY_MILLS_WHEN_EXCEPTION);
                 log.info("pull message later because not locked in broker, {}", pullRequest);
                 return;
@@ -298,6 +305,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
 
                     switch (pullResult.getPullStatus()) {
                         case FOUND:
+                            // 待拉取的偏移量
                             long prevRequestOffset = pullRequest.getNextOffset();
                             pullRequest.setNextOffset(pullResult.getNextBeginOffset());
                             long pullRT = System.currentTimeMillis() - beginTimestamp;
@@ -401,6 +409,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
         boolean commitOffsetEnable = false;
         long commitOffsetValue = 0L;
         if (MessageModel.CLUSTERING == this.defaultMQPushConsumer.getMessageModel()) {
+            //当前MessageQueue的消费进度（内存中）。
             commitOffsetValue = this.offsetStore.readOffset(pullRequest.getMessageQueue(), ReadOffsetType.READ_FROM_MEMORY);
             if (commitOffsetValue > 0) {
                 commitOffsetEnable = true;
@@ -433,7 +442,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                 pullRequest.getNextOffset(),
                 this.defaultMQPushConsumer.getPullBatchSize(),
                 sysFlag,
-                commitOffsetValue,
+                commitOffsetValue,//当前MessageQueue的消费进度（内存中）
                 BROKER_SUSPEND_MAX_TIME_MILLIS,//broker挂起的最大时间
                 CONSUMER_TIMEOUT_MILLIS_WHEN_SUSPEND,//消息拉取超时时间
                 CommunicationMode.ASYNC, //默认异步拉取

@@ -29,6 +29,7 @@ public class SemaphoreReleaseOnlyOnce {
 
     public void release() {
         if (this.semaphore != null) {
+            //保证信号量只释放一次，异步调用有可能被回调多次（比如请求收到重复的响应）
             if (this.released.compareAndSet(false, true)) {
                 this.semaphore.release();
             }

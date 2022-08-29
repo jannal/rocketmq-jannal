@@ -73,6 +73,8 @@ public class TopicPublishInfo {
         if (lastBrokerName == null) {
             return selectOneMessageQueue();
         } else {
+            //使用ThreadLocal共享当前线程的递增，避免并发问题，多个方法可共享
+            //每个Produder应该有自己独立的轮询方式，从自己的随机数开始，所以使用本地局部变量
             int index = this.sendWhichQueue.getAndIncrement();
             for (int i = 0; i < this.messageQueueList.size(); i++) {
                 //与当前路由中消息队列个数取模

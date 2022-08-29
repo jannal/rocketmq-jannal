@@ -45,18 +45,21 @@ import org.apache.rocketmq.store.config.StorePathConfigHelper;
 
 public class ScheduleMessageService extends ConfigManager {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
-
+    // 内置的Topic，用于保存所有的定时消息
     public static final String SCHEDULE_TOPIC = "SCHEDULE_TOPIC_XXXX";
+    // 第一次执行定时任务的延迟时间
     private static final long FIRST_DELAY_TIME = 1000L;
+    // 第一次以后定时任务的检查间隔时间，默认100ms
     private static final long DELAY_FOR_A_WHILE = 100L;
+    // 延迟消息投递失败，默认10s后再次重新投递
     private static final long DELAY_FOR_A_PERIOD = 10000L;
-
+    // 延迟级别和延迟时间的映射关系
     private final ConcurrentMap<Integer /* level */, Long/* delay timeMillis */> delayLevelTable =
         new ConcurrentHashMap<Integer, Long>(32);
-
+    // 延迟级别与消费偏移量的关系
     private final ConcurrentMap<Integer /* level */, Long/* offset */> offsetTable =
         new ConcurrentHashMap<Integer, Long>(32);
-
+    // 定时线程
     private final Timer timer = new Timer("ScheduleMessageTimerThread", true);
 
     private final DefaultMessageStore defaultMessageStore;
@@ -102,16 +105,20 @@ public class ScheduleMessageService extends ConfigManager {
     }
 
     public void start() {
-
+        // 每个延迟级别都有一个独立的定时任务
         for (Map.Entry<Integer, Long> entry : this.delayLevelTable.entrySet()) {
+            // 延迟级别
             Integer level = entry.getKey();
+            // 延迟时间
             Long timeDelay = entry.getValue();
+            // 延迟级别对应的ConsumeQueue的偏移量，从此点开始扫描
             Long offset = this.offsetTable.get(level);
             if (null == offset) {
                 offset = 0L;
             }
-
+            // 延迟时间
             if (timeDelay != null) {
+                // 从现在起过FIRST_DELAY_TIME毫秒(1000)仅执行一次
                 this.timer.schedule(new DeliverDelayedMessageTimerTask(level, offset), FIRST_DELAY_TIME);
             }
         }
@@ -203,7 +210,9 @@ public class ScheduleMessageService extends ConfigManager {
     }
 
     class DeliverDelayedMessageTimerTask extends TimerTask {
+        // 延迟级别
         private final int delayLevel;
+        // ConsumeQueue待查询的的偏移量
         private final long offset;
 
         public DeliverDelayedMessageTimerTask(int delayLevel, long offset) {
@@ -218,6 +227,7 @@ public class ScheduleMessageService extends ConfigManager {
             } catch (Exception e) {
                 // XXX: warn and notify me
                 log.error("ScheduleMessageService, executeOnTimeup exception", e);
+                // 投递失败，默认10s后重新投递
                 ScheduleMessageService.this.timer.schedule(new DeliverDelayedMessageTimerTask(
                     this.delayLevel, this.offset), DELAY_FOR_A_PERIOD);
             }
@@ -229,8 +239,9 @@ public class ScheduleMessageService extends ConfigManager {
         private long correctDeliverTimestamp(final long now, final long deliverTimestamp) {
 
             long result = deliverTimestamp;
-
+            // 以当前时间重新计算投递的时间
             long maxTimestamp = now + ScheduleMessageService.this.delayLevelTable.get(this.delayLevel);
+            // ConsumeQueue存储的延迟时间> 以当前时间重新计算的延迟时间
             if (deliverTimestamp > maxTimestamp) {
                 result = now;
             }
@@ -239,6 +250,7 @@ public class ScheduleMessageService extends ConfigManager {
         }
 
         public void executeOnTimeup() {
+            // 延迟级别与queueId是一对一关系，可以相互转换
             ConsumeQueue cq =
                 ScheduleMessageService.this.defaultMessageStore.findConsumeQueue(SCHEDULE_TOPIC,
                     delayLevel2QueueId(delayLevel));
@@ -255,6 +267,7 @@ public class ScheduleMessageService extends ConfigManager {
                         for (; i < bufferCQ.getSize(); i += ConsumeQueue.CQ_STORE_UNIT_SIZE) {
                             long offsetPy = bufferCQ.getByteBuffer().getLong();
                             int sizePy = bufferCQ.getByteBuffer().getInt();
+                            // tagsCode存储的是投递时间
                             long tagsCode = bufferCQ.getByteBuffer().getLong();
 
                             if (cq.isExtAddr(tagsCode)) {
@@ -270,10 +283,11 @@ public class ScheduleMessageService extends ConfigManager {
                             }
 
                             long now = System.currentTimeMillis();
+                            // tagsCode保存的是超时时间，纠正当前消息的真正投递时间
                             long deliverTimestamp = this.correctDeliverTimestamp(now, tagsCode);
 
                             nextOffset = offset + (i / ConsumeQueue.CQ_STORE_UNIT_SIZE);
-
+                            // 判断延迟消息是否过期
                             long countdown = deliverTimestamp - now;
 
                             if (countdown <= 0) {
@@ -283,6 +297,7 @@ public class ScheduleMessageService extends ConfigManager {
 
                                 if (msgExt != null) {
                                     try {
+                                        // 恢复原始消息，清除延迟属性。重新投递消息到原始的Topic和queueId中
                                         MessageExtBrokerInner msgInner = this.messageTimeup(msgExt);
                                         PutMessageResult putMessageResult =
                                             ScheduleMessageService.this.defaultMessageStore
@@ -296,6 +311,7 @@ public class ScheduleMessageService extends ConfigManager {
                                             log.error(
                                                 "ScheduleMessageService, a message time up, but reput it failed, topic: {} msgId {}",
                                                 msgExt.getTopic(), msgExt.getMsgId());
+                                            // 如果投递失败，则重新投递，并且更新偏移量
                                             ScheduleMessageService.this.timer.schedule(
                                                 new DeliverDelayedMessageTimerTask(this.delayLevel,
                                                     nextOffset), DELAY_FOR_A_PERIOD);
@@ -317,6 +333,7 @@ public class ScheduleMessageService extends ConfigManager {
                                     }
                                 }
                             } else {
+                                // 重新投递
                                 ScheduleMessageService.this.timer.schedule(
                                     new DeliverDelayedMessageTimerTask(this.delayLevel, nextOffset),
                                     countdown);
@@ -325,6 +342,7 @@ public class ScheduleMessageService extends ConfigManager {
                             }
                         } // end of for
 
+                        // 继续调度下一个，更新消费偏移量
                         nextOffset = offset + (i / ConsumeQueue.CQ_STORE_UNIT_SIZE);
                         ScheduleMessageService.this.timer.schedule(new DeliverDelayedMessageTimerTask(
                             this.delayLevel, nextOffset), DELAY_FOR_A_WHILE);
@@ -336,7 +354,7 @@ public class ScheduleMessageService extends ConfigManager {
                     }
                 } // end of if (bufferCQ != null)
                 else {
-
+                    // 如果偏移量不正确，打印错误日志
                     long cqMinOffset = cq.getMinOffsetInQueue();
                     if (offset < cqMinOffset) {
                         failScheduleOffset = cqMinOffset;

@@ -23,9 +23,15 @@ public class ThreadLocalIndex {
     private final ThreadLocal<Integer> threadLocalIndex = new ThreadLocal<Integer>();
     private final Random random = new Random();
 
+    // 这个方法应该被命名为incrementAndGet
+    // https://github.com/apache/rocketmq/issues/2652
+
     public int getAndIncrement() {
         Integer index = this.threadLocalIndex.get();
+        //初始值从随机数开始，避免总是从0开始
         if (null == index) {
+            // https://github.com/apache/rocketmq/issues/2783
+            // 返回值可能只有0和pos=Math.abs(Integer.MAX_VALUE) % this.messageQueueList.size();
             index = Math.abs(random.nextInt());
             if (index < 0)
                 index = 0;

@@ -346,12 +346,14 @@ public class CommitLog {
                     String t = propertiesMap.get(MessageConst.PROPERTY_DELAY_TIME_LEVEL);
                     if (ScheduleMessageService.SCHEDULE_TOPIC.equals(topic) && t != null) {
                         int delayLevel = Integer.parseInt(t);
-
+                        // 如果延迟级别边界溢出，则重置为最大
                         if (delayLevel > this.defaultMessageStore.getScheduleMessageService().getMaxDelayLevel()) {
                             delayLevel = this.defaultMessageStore.getScheduleMessageService().getMaxDelayLevel();
                         }
 
                         if (delayLevel > 0) {
+                            // 计算具体的投递时间，并将改时间保存在ConsumeQueue的tagCode中
+                            // 投递时间=消息存储时间(storeTimestamp) + 延迟级别对应的时间
                             tagsCode = this.defaultMessageStore.getScheduleMessageService().computeDeliverTimestamp(delayLevel,
                                 storeTimestamp);
                         }
@@ -1059,6 +1061,7 @@ public class CommitLog {
 
                 try {
                     if (flushCommitLogTimed) {
+                        // 固定周期刷盘，直接sleep
                         Thread.sleep(interval);
                     } else {
                         //等待500ms
