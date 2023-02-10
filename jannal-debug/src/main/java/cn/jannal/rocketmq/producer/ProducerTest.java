@@ -206,7 +206,7 @@ public class ProducerTest {
      */
     @Test
     public void testMessageOrder() {
-        String namesrvAddr = "rocketmq-nameserver1:9876;rocketmq-nameserver2:9877";
+        String namesrvAddr = "rocketmq-nameserver1:9876;rocketmq-nameserver2:9876";
         String producerGroup = "ProducerGroupName";
         final DefaultMQProducer defaultMQProducer = new DefaultMQProducer(producerGroup);
         try {
@@ -216,7 +216,7 @@ public class ProducerTest {
             defaultMQProducer.setRetryTimesWhenSendFailed(3);
             defaultMQProducer.start();
 
-            String topic = "testTopic";
+            String topic = "testTopicOrder";
             String tag = "TagA";
             String keys = "keys";
             String msgType = null;
@@ -239,6 +239,7 @@ public class ProducerTest {
                         return mqs.get(index);
                     }
                 }, msgType);
+                logger.info("返回消息:{}", sendResult);
             }
         } catch (Exception e) {
             logger.error(e.getMessage(), e);

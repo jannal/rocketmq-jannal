@@ -28,7 +28,7 @@ import java.util.concurrent.locks.LockSupport;
 /**
  * @author jannal
  **/
-public class ConsumerTest {
+public class ConsumerDebugTest {
     private org.slf4j.Logger logger = LoggerFactory.getLogger("rocketmq-consumer");
 
     /**
@@ -36,8 +36,8 @@ public class ConsumerTest {
      */
     @Test
     public void testPushConsumer() {
-        String namesrvAddr = "rocketmq-nameserver1:9876;rocketmq-nameserver2:9876";
-        String consumerGroup = "ConsumerGroupName3";
+        String namesrvAddr = "rocketmq-nameserver1:9876";
+        String consumerGroup = "ConsumerGroupName4";
 
         DefaultMQPushConsumer consumer = new DefaultMQPushConsumer(consumerGroup);
         try {
@@ -172,7 +172,7 @@ public class ConsumerTest {
             consumer.setConsumeThreadMax(4);
             consumer.setConsumeThreadMin(1);
 
-            consumer.subscribe("testTopicOrder", "TagA");
+            consumer.subscribe("testTopic", "TagA");
             consumer.registerMessageListener(new MessageListenerOrderly() {
 
                 @Override

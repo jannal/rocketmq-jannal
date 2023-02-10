@@ -32,7 +32,7 @@ public class ProducerTest2 {
      */
     @Test
     public void testSync() {
-        String namesrvAddr = "127.0.0.1:9876";
+        String namesrvAddr = "172.16.117.33:9876";
         String producerGroup = "ProducerGroupName";
         final DefaultMQProducer defaultMQProducer = new DefaultMQProducer(producerGroup);
         try {
@@ -49,12 +49,13 @@ public class ProducerTest2 {
             String topic = "testTopic";
             String tag = "TagA";
             String keys = "keys";
-            for (int i = 0; i < 1; i++) {
+            for (int i = 0; i < 10000000; i++) {
                 String msg = "hello world 0";
                 System.out.println(msg.getBytes(RemotingHelper.DEFAULT_CHARSET).length);
                 Message message = new Message(topic, tag, keys, msg.getBytes(RemotingHelper.DEFAULT_CHARSET));
                 SendResult sendResult = defaultMQProducer.send(message);
                 logger.info("第{}条消息:返回状态{}", i, sendResult.getSendStatus());
+                Thread.sleep(1000);
             }
         } catch (Exception e) {
             logger.error(e.getMessage(), e);
