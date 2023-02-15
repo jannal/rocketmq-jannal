@@ -11,3 +11,4 @@ devenv
 !NOTICE-BIN
 !LICENSE-BIN
 .DS_Store
+!src/main/java/org/apache/rocketmq/broker/out/BrokerOuterAPI.java
